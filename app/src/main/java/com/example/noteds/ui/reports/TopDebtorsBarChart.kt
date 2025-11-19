@@ -1,25 +1,26 @@
 package com.example.noteds.ui.reports
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.patrykandpatrick.vico.compose.cartesian.CartesianChartHost
-import com.patrykandpatrick.vico.compose.cartesian.axis.HorizontalAxis
-import com.patrykandpatrick.vico.compose.cartesian.axis.VerticalAxis
-import com.patrykandpatrick.vico.compose.cartesian.layer.rememberColumnCartesianLayer
-import com.patrykandpatrick.vico.compose.cartesian.rememberCartesianChart
-import com.patrykandpatrick.vico.compose.common.ProvideVicoTheme
-import com.patrykandpatrick.vico.compose.m3.common.rememberM3VicoTheme
-import com.patrykandpatrick.vico.core.cartesian.data.CartesianChartModelProducer
-import com.patrykandpatrick.vico.core.cartesian.data.CartesianValueFormatter
-import com.patrykandpatrick.vico.core.cartesian.data.columnSeries
-import kotlin.math.roundToInt
+import java.text.NumberFormat
+import java.util.Locale
 
 @Composable
 fun TopDebtorsBarChart(
@@ -35,42 +36,48 @@ fun TopDebtorsBarChart(
         return
     }
 
-    val chartModelProducer = remember { CartesianChartModelProducer() }
-    val truncatedNames = remember(customerDebts) {
-        customerDebts.map { (name, _) ->
-            if (name.length <= 10) name else name.take(9) + "\u2026"
-        }
-    }
+    val currencyFormatter = remember { NumberFormat.getCurrencyInstance(Locale.getDefault()) }
+    val maxDebt = remember(customerDebts) { customerDebts.maxOf { it.second }.coerceAtLeast(1.0) }
 
-    val bottomAxisValueFormatter = remember(truncatedNames) {
-        CartesianValueFormatter { _, value, _ ->
-            val index = value.roundToInt().coerceIn(truncatedNames.indices)
-            truncatedNames[index]
-        }
-    }
-
-    LaunchedEffect(customerDebts) {
-        chartModelProducer.runTransaction {
-            columnSeries {
-                series(customerDebts.map { (_, balance) -> balance.coerceAtLeast(0.0) })
+    Column(modifier = modifier.fillMaxWidth()) {
+        customerDebts.take(5).forEach { (name, amount) ->
+            val progress = (amount / maxDebt).toFloat().coerceIn(0f, 1f)
+            Column(modifier = Modifier.padding(vertical = 8.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = name,
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.weight(1f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = currencyFormatter.format(amount),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(8.dp)
+                        .clip(RoundedCornerShape(50))
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(progress)
+                            .fillMaxHeight()
+                            .clip(RoundedCornerShape(50))
+                            .background(MaterialTheme.colorScheme.primary)
+                    )
+                }
             }
         }
-    }
-
-    ProvideVicoTheme(theme = rememberM3VicoTheme()) {
-        CartesianChartHost(
-            chart = rememberCartesianChart(
-                rememberColumnCartesianLayer(),
-                startAxis = VerticalAxis.rememberStart(),
-                bottomAxis = HorizontalAxis.rememberBottom(
-                    valueFormatter = bottomAxisValueFormatter,
-                    labelRotationDegrees = 0f
-                )
-            ),
-            modelProducer = chartModelProducer,
-            modifier = modifier
-                .fillMaxWidth()
-                .height(240.dp)
-        )
     }
 }

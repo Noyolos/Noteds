@@ -57,14 +57,15 @@ fun TotalDebtCard(
 ) {
     val currencyFormatter = remember { NumberFormat.getCurrencyInstance(Locale.getDefault()) }
     val formatted = remember(totalDebt) { currencyFormatter.format(totalDebt) }
+    val colorScheme = MaterialTheme.colorScheme
     val gradient = remember(
-        MaterialTheme.colorScheme.primary,
-        MaterialTheme.colorScheme.secondary
+        colorScheme.primary,
+        colorScheme.secondary
     ) {
         Brush.linearGradient(
             listOf(
-                MaterialTheme.colorScheme.primary,
-                MaterialTheme.colorScheme.secondary
+                colorScheme.primary,
+                colorScheme.secondary
             )
         )
     }
