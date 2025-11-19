@@ -34,8 +34,8 @@ fun CustomerDetailScreen(
     val customers by customerViewModel.customersWithBalance.collectAsState()
     val selected = customers.firstOrNull { it.customer.id == customerId }
 
-    LaunchedEffect(selected) {
-        if (selected == null) {
+    LaunchedEffect(customers) {
+        if (customers.isNotEmpty() && selected == null) {
             onClose()
         }
     }
