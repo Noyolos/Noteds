@@ -4,13 +4,13 @@
 
     <application
         android:name=".NotedsApp"
-        android:icon="@mipmap/ic_launcher"
+        android:icon="@drawable/ic_launcher"
         android:label="Shazhang"
-        android:theme="@style/Theme.Material3.DayNight.NoActionBar">
+        android:theme="@style/Theme.Noteds">
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:theme="@style/Theme.Material3.DayNight.NoActionBar">
+            android:theme="@style/Theme.Noteds">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 

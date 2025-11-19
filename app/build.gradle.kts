@@ -77,5 +77,5 @@ dependencies {
 
     implementation("com.google.accompanist:accompanist-permissions:0.37.3")
 
-    implementation("com.patrykandpatryk.vico:compose-m3:2.2.0")
+    implementation("com.google.android.material:material:1.12.0")
 }

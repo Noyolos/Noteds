@@ -114,7 +114,75 @@ case "$( uname )" in                #(
   NONSTOP* )        nonstop=true ;;
 esac
 
-CLASSPATH="\\\"\\\""
+WRAPPER_JAR="$APP_HOME/gradle/wrapper/gradle-wrapper.jar"
+BASE64_WRAPPER="$APP_HOME/gradle/wrapper/gradle-wrapper.jar.base64"
+
+decode_base64_file() {
+    src=$1
+    dest=$2
+    if [ ! -f "$src" ]; then
+        return 1
+    fi
+
+    if command -v python3 >/dev/null 2>&1; then
+        if python3 - "$src" "$dest" <<'PY'; then
+import base64
+import pathlib
+import sys
+src_path = pathlib.Path(sys.argv[1])
+dest_path = pathlib.Path(sys.argv[2])
+dest_path.parent.mkdir(parents=True, exist_ok=True)
+dest_path.write_bytes(base64.b64decode(src_path.read_bytes()))
+PY
+            return 0
+        fi
+    fi
+
+    if command -v python >/dev/null 2>&1; then
+        if python - "$src" "$dest" <<'PY'; then
+import base64
+import pathlib
+import sys
+src_path = pathlib.Path(sys.argv[1])
+dest_path = pathlib.Path(sys.argv[2])
+dest_path.parent.mkdir(parents=True, exist_ok=True)
+dest_path.write_bytes(base64.b64decode(src_path.read_bytes()))
+PY
+            return 0
+        fi
+    fi
+
+    if command -v base64 >/dev/null 2>&1; then
+        if base64 --decode "$src" > "$dest" 2>/dev/null; then
+            return 0
+        fi
+        if base64 -d "$src" > "$dest" 2>/dev/null; then
+            return 0
+        fi
+        if base64 -D -i "$src" > "$dest" 2>/dev/null; then
+            return 0
+        fi
+    fi
+
+    return 1
+}
+
+ensure_gradle_wrapper_jar() {
+    jar_path=$1
+    if [ -f "$jar_path" ]; then
+        return 0
+    fi
+
+    if [ -f "$BASE64_WRAPPER" ] && decode_base64_file "$BASE64_WRAPPER" "$jar_path"; then
+        return 0
+    fi
+
+    die "Gradle wrapper JAR is missing and could not be reconstructed. Please run './gradlew wrapper' using a full Gradle distribution."
+}
+
+ensure_gradle_wrapper_jar "$WRAPPER_JAR"
+
+CLASSPATH=$WRAPPER_JAR
 
 
 # Determine the Java command to use to start the JVM.
@@ -213,7 +281,7 @@ DEFAULT_JVM_OPTS='"-Xmx64m" "-Xms64m"'
 set -- \
         "-Dorg.gradle.appname=$APP_BASE_NAME" \
         -classpath "$CLASSPATH" \
-        -jar "$APP_HOME/gradle/wrapper/gradle-wrapper.jar" \
+        org.gradle.wrapper.GradleWrapperMain \
         "$@"
 
 # Stop when "xargs" is not available.

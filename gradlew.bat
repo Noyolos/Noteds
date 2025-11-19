@@ -38,6 +38,30 @@ for %%i in ("%APP_HOME%") do set APP_HOME=%%~fi
 @rem Add default JVM options here. You can also use JAVA_OPTS and GRADLE_OPTS to pass JVM options to this script.
 set DEFAULT_JVM_OPTS="-Xmx64m" "-Xms64m"
 
+set WRAPPER_JAR=%APP_HOME%\gradle\wrapper\gradle-wrapper.jar
+set WRAPPER_BASE64=%APP_HOME%\gradle\wrapper\gradle-wrapper.jar.base64
+if exist "%WRAPPER_JAR%" goto wrapperJarReady
+
+if exist "%WRAPPER_BASE64%" goto decodeWrapper
+
+echo. 1>&2
+echo ERROR: %WRAPPER_JAR% is missing and gradle-wrapper.jar.base64 is not available. 1>&2
+echo Please regenerate the wrapper by running "gradle wrapper" with a full Gradle distribution. 1>&2
+goto fail
+
+:decodeWrapper
+powershell -NoProfile -Command ^
+  "$ErrorActionPreference = 'Stop';" ^
+  "$src = '%WRAPPER_BASE64%';" ^
+  "$dest = '%WRAPPER_JAR%';" ^
+  "if (-not (Test-Path -LiteralPath $src)) { throw 'Base64-encoded Gradle wrapper is missing.' }" ^
+  "New-Item -ItemType Directory -Force -Path (Split-Path $dest) | Out-Null;" ^
+  "$bytes = [System.Convert]::FromBase64String([System.IO.File]::ReadAllText($src));" ^
+  "[System.IO.File]::WriteAllBytes($dest, $bytes);"
+if %ERRORLEVEL% neq 0 goto fail
+
+:wrapperJarReady
+
 @rem Find java.exe
 if defined JAVA_HOME goto findJavaFromJavaHome
 
@@ -70,11 +94,11 @@ goto fail
 :execute
 @rem Setup the command line
 
-set CLASSPATH=
+set CLASSPATH=%APP_HOME%\gradle\wrapper\gradle-wrapper.jar
 
 
 @rem Execute Gradle
-"%JAVA_EXE%" %DEFAULT_JVM_OPTS% %JAVA_OPTS% %GRADLE_OPTS% "-Dorg.gradle.appname=%APP_BASE_NAME%" -classpath "%CLASSPATH%" -jar "%APP_HOME%\gradle\wrapper\gradle-wrapper.jar" %*
+"%JAVA_EXE%" %DEFAULT_JVM_OPTS% %JAVA_OPTS% %GRADLE_OPTS% "-Dorg.gradle.appname=%APP_BASE_NAME%" -classpath "%CLASSPATH%" org.gradle.wrapper.GradleWrapperMain %*
 
 :end
 @rem End local scope for the variables with windows NT shell

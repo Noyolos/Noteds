@@ -13,5 +13,9 @@
 .externalNativeBuild
 .cxx
 local.properties
+**/build/
+.android-sdk/
+/.kotlin/
+gradle/wrapper/gradle-wrapper.jar
 
 # Project exclude paths
