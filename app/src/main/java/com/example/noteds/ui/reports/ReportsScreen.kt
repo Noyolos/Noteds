@@ -16,7 +16,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.noteds.ui.components.ModernCard
 import com.example.noteds.ui.components.TotalDebtCard
-import com.example.noteds.ui.reports.TopDebtorsBarChart
 
 @Composable
 fun ReportsScreen(

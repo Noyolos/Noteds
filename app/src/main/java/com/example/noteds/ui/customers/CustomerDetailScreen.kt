@@ -1,30 +1,29 @@
 package com.example.noteds.ui.customers
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material3.*
+import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset // ★ 修正了這裡
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.example.noteds.ui.components.FullScreenImageDialog
+import androidx.compose.ui.unit.sp
+import com.example.noteds.ui.components.TransactionFormScreen
+import com.example.noteds.ui.theme.*
+import java.text.NumberFormat
+import java.util.Locale
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CustomerDetailScreen(
     customerId: Long,
@@ -33,76 +32,196 @@ fun CustomerDetailScreen(
 ) {
     val customers by customerViewModel.customersWithBalance.collectAsState()
     val selected = customers.firstOrNull { it.customer.id == customerId }
+    val currencyFormatter = remember { NumberFormat.getCurrencyInstance(Locale.getDefault()) }
 
-    LaunchedEffect(customers) {
-        if (customers.isNotEmpty() && selected == null) {
-            onClose()
-        }
+    var showTransactionForm by remember { mutableStateOf<String?>(null) }
+
+    if (selected == null) {
+        onClose()
+        return
     }
 
-    selected ?: return
-
-    var fullScreenPhoto by remember { mutableStateOf<String?>(null) }
-
-    Surface(
-        modifier = Modifier.fillMaxSize(),
-        color = MaterialTheme.colorScheme.background
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(24.dp)
-        ) {
-            Text(
-                text = selected.customer.name,
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold
-            )
-            Text(
-                text = selected.customer.phone,
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            if (selected.customer.note.isNotBlank()) {
-                Text(
-                    text = selected.customer.note,
-                    style = MaterialTheme.typography.bodyMedium
-                )
+    if (showTransactionForm != null) {
+        TransactionFormScreen(
+            customer = selected.customer,
+            transactionType = showTransactionForm!!,
+            onBack = { showTransactionForm = null },
+            onSave = { amount, note ->
+                customerViewModel.addLedgerEntry(customerId, showTransactionForm!!, amount, note)
+                showTransactionForm = null
             }
-
-            CustomerPhotoPicker(
-                title = "Profile photo",
-                subtitle = "Add or update the customer's avatar",
-                currentPhotoUri = selected.customer.profilePhotoUri,
-                onPhotoSelected = { customerViewModel.updateProfilePhoto(customerId, it) },
-                onViewPhoto = { fullScreenPhoto = it }
-            )
-
-            CustomerPhotoPicker(
-                title = "ID Card photo",
-                subtitle = "Capture or select an ID card image",
-                currentPhotoUri = selected.customer.idCardPhotoUri,
-                onPhotoSelected = { customerViewModel.updateIdCardPhoto(customerId, it) },
-                onViewPhoto = { fullScreenPhoto = it }
-            )
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            TextButton(
-                onClick = onClose,
-                modifier = Modifier.align(Alignment.End)
-            ) {
-                Text(text = "Close")
-            }
-        }
-    }
-
-    fullScreenPhoto?.let { uri ->
-        FullScreenImageDialog(
-            photoUri = uri,
-            onDismiss = { fullScreenPhoto = null }
         )
+    } else {
+        Scaffold(
+            topBar = {
+                TopAppBar(
+                    title = { Text("客人详情", color = Color.White) },
+                    navigationIcon = {
+                        IconButton(onClick = onClose) {
+                            Icon(Icons.Default.ArrowBack, contentDescription = null, tint = Color.White)
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = TealPrimary)
+                )
+            },
+            bottomBar = {
+                Surface(
+                    shadowElevation = 8.dp,
+                    modifier = Modifier.navigationBarsPadding()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .padding(16.dp)
+                            .fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Button(
+                            onClick = { showTransactionForm = "DEBT" },
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(50.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = TealPrimary),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text("记赊账")
+                        }
+                        OutlinedButton(
+                            onClick = { showTransactionForm = "PAYMENT" },
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(50.dp),
+                            border = BorderStroke(1.dp, TealPrimary),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text("登记还钱", color = TealPrimary)
+                        }
+                    }
+                }
+            },
+            containerColor = BackgroundGray
+        ) { padding ->
+            LazyColumn(
+                modifier = Modifier
+                    .padding(padding)
+                    .fillMaxSize()
+            ) {
+                item {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Color.White)
+                            .padding(20.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(60.dp)
+                                .clip(CircleShape)
+                                .background(TealLight),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                selected.customer.name.take(1),
+                                fontSize = 24.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = TealDark
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(16.dp))
+                        Column {
+                            Text(selected.customer.name, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                            Text(selected.customer.phone, color = TextGray)
+                            Text("B98765432", color = TextGray)
+                        }
+                    }
+                }
+
+                item {
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = DebtRedBg),
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(1.dp, DebtRed.copy(alpha = 0.1f)),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(20.dp)) {
+                            Text("当前欠款", color = TextGray)
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                currencyFormatter.format(selected.balance),
+                                color = DebtRed,
+                                fontSize = 32.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text("最后还钱: 2025-10-28", color = TextGray, fontSize = 14.sp)
+                        }
+                    }
+                }
+
+                item {
+                    TabRow(
+                        selectedTabIndex = 0,
+                        containerColor = Color.White,
+                        contentColor = TealPrimary,
+                        indicator = { tabPositions ->
+                            TabRowDefaults.SecondaryIndicator(
+                                Modifier.tabIndicatorOffset(tabPositions[0]),
+                                color = TealPrimary
+                            )
+                        }
+                    ) {
+                        Tab(selected = true, onClick = {}, text = { Text("流水记录") })
+                        Tab(selected = false, onClick = {}, text = { Text("图表") })
+                    }
+                }
+
+                items(3) {
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        elevation = CardDefaults.cardElevation(1.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .padding(16.dp)
+                                .fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text("2025-11-08", color = TextGray, fontSize = 14.sp)
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Surface(
+                                        color = DebtRed,
+                                        shape = RoundedCornerShape(4.dp),
+                                        modifier = Modifier.padding(end = 8.dp)
+                                    ) {
+                                        Text(
+                                            "赊账",
+                                            color = Color.White,
+                                            fontSize = 10.sp,
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                        )
+                                    }
+                                    Text("杂货", color = TextBlack)
+                                }
+                            }
+                            Text(
+                                "+RM 420.00",
+                                color = DebtRed,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 18.sp
+                            )
+                        }
+                    }
+                }
+            }
+        }
     }
 }

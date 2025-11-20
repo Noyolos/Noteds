@@ -1,13 +1,7 @@
 package com.example.noteds.ui.reports
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -24,7 +18,7 @@ import java.util.Locale
 
 @Composable
 fun TopDebtorsBarChart(
-    customerDebts: List<Pair<String, Double>>,
+    customerDebts: List<DebtorData>, // ★ 修改這裡：改用 DebtorData
     modifier: Modifier = Modifier
 ) {
     if (customerDebts.isEmpty()) {
@@ -37,18 +31,20 @@ fun TopDebtorsBarChart(
     }
 
     val currencyFormatter = remember { NumberFormat.getCurrencyInstance(Locale.getDefault()) }
-    val maxDebt = remember(customerDebts) { customerDebts.maxOf { it.second }.coerceAtLeast(1.0) }
+    // ★ 修改這裡：it.second -> it.amount
+    val maxDebt = remember(customerDebts) { customerDebts.maxOf { it.amount }.coerceAtLeast(1.0) }
 
     Column(modifier = modifier.fillMaxWidth()) {
-        customerDebts.take(5).forEach { (name, amount) ->
-            val progress = (amount / maxDebt).toFloat().coerceIn(0f, 1f)
+        // ★ 修改這裡：解構 DebtorData
+        customerDebts.take(5).forEach { debtor ->
+            val progress = (debtor.amount / maxDebt).toFloat().coerceIn(0f, 1f)
             Column(modifier = Modifier.padding(vertical = 8.dp)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = name,
+                        text = debtor.name, // ★ name
                         style = MaterialTheme.typography.bodyLarge,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onSurface,
@@ -57,7 +53,7 @@ fun TopDebtorsBarChart(
                         overflow = TextOverflow.Ellipsis
                     )
                     Text(
-                        text = currencyFormatter.format(amount),
+                        text = currencyFormatter.format(debtor.amount), // ★ amount
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

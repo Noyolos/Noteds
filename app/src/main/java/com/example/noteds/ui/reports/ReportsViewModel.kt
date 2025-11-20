@@ -13,12 +13,20 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 
+// 定義一個簡單的資料類別給排行榜用，包含 ID
+data class DebtorData(
+    val id: Long,
+    val name: String,
+    val amount: Double
+)
+
 class ReportsViewModel(
     private val customerRepository: CustomerRepository,
     private val ledgerRepository: LedgerRepository
 ) : ViewModel() {
 
-    private val customersWithBalance: StateFlow<List<Pair<String, Double>>> =
+    // 改為回傳 DebtorData 列表
+    private val customersWithBalance: StateFlow<List<DebtorData>> =
         combineCustomerBalances(
             customerRepository.getAllCustomers(),
             ledgerRepository.getAllEntries()
@@ -31,8 +39,8 @@ class ReportsViewModel(
 
     val totalDebt: StateFlow<Double> = customersWithBalance
         .map { list ->
-            list.filter { it.second > 0.0 }
-                .sumOf { it.second }
+            list.filter { it.amount > 0.0 }
+                .sumOf { it.amount }
         }
         .stateIn(
             scope = viewModelScope,
@@ -40,10 +48,11 @@ class ReportsViewModel(
             initialValue = 0.0
         )
 
-    val topDebtors: StateFlow<List<Pair<String, Double>>> = customersWithBalance
+    // 排行榜現在包含 ID 了
+    val topDebtors: StateFlow<List<DebtorData>> = customersWithBalance
         .map { list ->
-            list.filter { it.second > 0.0 }
-                .sortedByDescending { it.second }
+            list.filter { it.amount > 0.0 }
+                .sortedByDescending { it.amount }
                 .take(5)
         }
         .stateIn(
@@ -55,7 +64,7 @@ class ReportsViewModel(
     private fun combineCustomerBalances(
         customersFlow: Flow<List<CustomerEntity>>,
         entriesFlow: Flow<List<LedgerEntryEntity>>
-    ): Flow<List<Pair<String, Double>>> =
+    ): Flow<List<DebtorData>> =
         combine(customersFlow, entriesFlow) { customers, entries ->
             val balanceByCustomer = entries.groupBy { it.customerId }
                 .mapValues { (_, customerEntries) ->
@@ -70,7 +79,11 @@ class ReportsViewModel(
                 }
 
             customers.map { customer ->
-                customer.name to (balanceByCustomer[customer.id] ?: 0.0)
+                DebtorData(
+                    id = customer.id,
+                    name = customer.name,
+                    amount = balanceByCustomer[customer.id] ?: 0.0
+                )
             }
         }
 }
