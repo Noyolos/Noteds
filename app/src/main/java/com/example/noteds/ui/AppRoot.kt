@@ -16,6 +16,7 @@ import com.example.noteds.ui.customers.CustomerListScreen
 import com.example.noteds.ui.customers.CustomerDetailScreen
 import com.example.noteds.ui.customers.CustomerViewModel
 import com.example.noteds.ui.home.DashboardScreen
+import com.example.noteds.ui.reports.ReportsScreen
 import com.example.noteds.ui.reports.ReportsViewModel
 import com.example.noteds.ui.theme.TealPrimary
 
@@ -27,9 +28,9 @@ fun AppRoot(
     // ... (前段不變) ...
     val destinations = remember {
         listOf(
-            BottomDestination("首页", Icons.Default.Home),
-            BottomDestination("客人", Icons.Default.People),
-            BottomDestination("报表", Icons.Default.BarChart)
+            BottomDestination("Dashboard", Icons.Default.Home),
+            BottomDestination("Customers", Icons.Default.People),
+            BottomDestination("Reports", Icons.Default.BarChart)
         )
     }
     val selectedIndex = rememberSaveable { mutableIntStateOf(0) }
@@ -69,15 +70,14 @@ fun AppRoot(
                 when (selectedIndex.intValue) {
                     0 -> DashboardScreen(
                         reportsViewModel = reportsViewModel,
-                        onCustomerClick = { id -> selectedCustomerId.value = id } // 連接這裡！
+                        onCustomerClick = { id -> selectedCustomerId.value = id }
                     )
                     1 -> CustomerListScreen(
                         customerViewModel = customerViewModel,
                         onCustomerClick = { selectedCustomerId.value = it.customer.id }
                     )
-                    2 -> DashboardScreen(
-                        reportsViewModel = reportsViewModel,
-                        onCustomerClick = { id -> selectedCustomerId.value = id }
+                    2 -> ReportsScreen(
+                        reportsViewModel = reportsViewModel
                     )
                 }
             }

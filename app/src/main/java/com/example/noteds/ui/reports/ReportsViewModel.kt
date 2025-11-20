@@ -6,6 +6,7 @@ import com.example.noteds.data.entity.CustomerEntity
 import com.example.noteds.data.entity.LedgerEntryEntity
 import com.example.noteds.data.repository.CustomerRepository
 import com.example.noteds.data.repository.LedgerRepository
+import java.util.Calendar
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -25,11 +26,19 @@ class ReportsViewModel(
     private val ledgerRepository: LedgerRepository
 ) : ViewModel() {
 
+    private val allEntries: StateFlow<List<LedgerEntryEntity>> =
+        ledgerRepository.getAllEntries()
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5_000),
+                initialValue = emptyList()
+            )
+
     // 改為回傳 DebtorData 列表
     private val customersWithBalance: StateFlow<List<DebtorData>> =
         combineCustomerBalances(
             customerRepository.getAllCustomers(),
-            ledgerRepository.getAllEntries()
+            allEntries
         )
             .stateIn(
                 scope = viewModelScope,
@@ -61,6 +70,34 @@ class ReportsViewModel(
             initialValue = emptyList()
         )
 
+    val debtThisMonth: StateFlow<Double> = allEntries
+        .map { entries ->
+            val (start, end) = currentMonthRange()
+            entries.filter { entry ->
+                entry.type.equals("DEBT", ignoreCase = true) &&
+                        entry.timestamp in start until end
+            }.sumOf { it.amount }
+        }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000),
+            initialValue = 0.0
+        )
+
+    val repaymentThisMonth: StateFlow<Double> = allEntries
+        .map { entries ->
+            val (start, end) = currentMonthRange()
+            entries.filter { entry ->
+                entry.type.equals("PAYMENT", ignoreCase = true) &&
+                        entry.timestamp in start until end
+            }.sumOf { it.amount }
+        }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000),
+            initialValue = 0.0
+        )
+
     private fun combineCustomerBalances(
         customersFlow: Flow<List<CustomerEntity>>,
         entriesFlow: Flow<List<LedgerEntryEntity>>
@@ -86,4 +123,18 @@ class ReportsViewModel(
                 )
             }
         }
+
+    private fun currentMonthRange(): Pair<Long, Long> {
+        val calendar = Calendar.getInstance().apply {
+            set(Calendar.DAY_OF_MONTH, 1)
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+        val start = calendar.timeInMillis
+        calendar.add(Calendar.MONTH, 1)
+        val end = calendar.timeInMillis
+        return start to end
+    }
 }

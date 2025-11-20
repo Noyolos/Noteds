@@ -30,16 +30,18 @@ import java.util.Locale
 @Composable
 fun DashboardScreen(
     reportsViewModel: ReportsViewModel,
-    onCustomerClick: (Long) -> Unit // 新增回調函數
+    onCustomerClick: (Long) -> Unit
 ) {
     val totalDebt by reportsViewModel.totalDebt.collectAsState()
     val topDebtors by reportsViewModel.topDebtors.collectAsState()
+    val debtThisMonth by reportsViewModel.debtThisMonth.collectAsState()
+    val repaymentThisMonth by reportsViewModel.repaymentThisMonth.collectAsState()
     val currencyFormatter = remember { NumberFormat.getCurrencyInstance(Locale.getDefault()) }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("赊账小本本", color = Color.White) },
+                title = { Text("Dashboard", color = Color.White, fontWeight = FontWeight.Bold) },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = TealPrimary),
                 actions = {
                     IconButton(onClick = { /* Settings */ }) {
@@ -57,69 +59,49 @@ fun DashboardScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // 1. Hero Card (Total Debt)
             item {
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = TealPrimary),
-                    shape = RoundedCornerShape(16.dp),
-                    elevation = CardDefaults.cardElevation(4.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(modifier = Modifier.padding(24.dp)) {
-                        Text("当前总欠款", color = Color.White.copy(alpha = 0.8f), fontSize = 14.sp)
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            currencyFormatter.format(totalDebt),
-                            color = Color.White,
-                            fontSize = 32.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
+                HeroCard(totalDebt = totalDebt, currencyFormatter = currencyFormatter)
             }
 
-            // 2. Stats Row
             item {
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     StatCard(
-                        title = "本月赊账",
-                        amount = "RM 455.00",
+                        title = "Debt this Month",
+                        amount = currencyFormatter.format(debtThisMonth),
                         amountColor = DebtRed,
                         modifier = Modifier.weight(1f)
                     )
                     StatCard(
-                        title = "本月已还",
-                        amount = "RM 120.00",
+                        title = "Repayment this Month",
+                        amount = currencyFormatter.format(repaymentThisMonth),
                         amountColor = PaymentGreen,
                         modifier = Modifier.weight(1f)
                     )
                 }
             }
 
-            // 3. Top Debtors Header
             item {
                 Text(
-                    "欠款最多的客人",
+                    "Top Debtors",
                     style = MaterialTheme.typography.titleMedium,
-                    color = TextGray,
+                    color = TextBlack,
                     modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
                 )
             }
 
-            // 4. Top Debtors List
             items(
                 items = topDebtors,
-                key = { it.id } // 使用 ID 作為 Key
+                key = { it.id }
             ) { debtor ->
                 Card(
                     colors = CardDefaults.cardColors(containerColor = Color.White),
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { onCustomerClick(debtor.id) }, // 點擊事件
+                        .clickable { onCustomerClick(debtor.id) },
                     elevation = CardDefaults.cardElevation(1.dp)
                 ) {
                     Row(
@@ -146,7 +128,11 @@ fun DashboardScreen(
                             Spacer(modifier = Modifier.width(12.dp))
                             Column {
                                 Text(debtor.name, fontWeight = FontWeight.SemiBold, color = TextBlack)
-                                Text("01x-xxxxxxx", style = MaterialTheme.typography.bodySmall, color = TextGray)
+                                Text(
+                                    "Outstanding",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = TextGray
+                                )
                             }
                         }
                         Text(
@@ -157,6 +143,45 @@ fun DashboardScreen(
                     }
                 }
                 Spacer(modifier = Modifier.height(8.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun HeroCard(totalDebt: Double, currencyFormatter: NumberFormat) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = TealPrimary),
+        shape = RoundedCornerShape(20.dp),
+        elevation = CardDefaults.cardElevation(6.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(24.dp)
+        ) {
+            Text("Total Outstanding Debt", color = Color.White.copy(alpha = 0.8f), fontSize = 14.sp)
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(
+                currencyFormatter.format(totalDebt),
+                color = Color.White,
+                fontSize = 34.sp,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Surface(
+                    color = Color.White.copy(alpha = 0.2f),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text(
+                        "FinTech Overview",
+                        color = Color.White,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        fontSize = 12.sp
+                    )
+                }
             }
         }
     }

@@ -46,7 +46,7 @@ fun CustomerListScreen(
         } else {
             customers.filter {
                 it.customer.name.contains(searchQuery, ignoreCase = true) ||
-                        it.customer.phone.contains(searchQuery)
+                        it.customer.phone.contains(searchQuery, ignoreCase = true)
             }
         }
     }
@@ -99,7 +99,8 @@ fun CustomerListScreen(
 
             LazyColumn(
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.fillMaxSize()
             ) {
                 items(
                     items = filteredCustomers,
@@ -135,9 +136,9 @@ fun CustomerCard(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White),
-        elevation = CardDefaults.cardElevation(1.dp)
+        elevation = CardDefaults.cardElevation(4.dp)
     ) {
         Row(
             modifier = Modifier
@@ -147,7 +148,7 @@ fun CustomerCard(
         ) {
             Box(
                 modifier = Modifier
-                    .size(50.dp)
+                    .size(52.dp)
                     .clip(CircleShape)
                     .background(TealLight),
                 contentAlignment = Alignment.Center
@@ -170,20 +171,30 @@ fun CustomerCard(
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Row {
-                    Text("现欠: ", style = MaterialTheme.typography.bodyMedium, color = TextGray)
+                    Text("Outstanding: ", style = MaterialTheme.typography.bodyMedium, color = TextGray)
                     Text(
                         formatter.format(item.balance),
                         style = MaterialTheme.typography.bodyMedium,
                         color = if (item.balance > 0) DebtRed else PaymentGreen,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
                     )
                 }
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "最后还钱: 2025-11-01",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = TextGray
-                )
+                Spacer(modifier = Modifier.height(6.dp))
+                Surface(
+                    color = BackgroundGray,
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(item.customer.phone.ifBlank { "No phone" }, color = TextGray, fontSize = 12.sp)
+                        Text("View", color = TealPrimary, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
+                    }
+                }
             }
 
             Icon(
