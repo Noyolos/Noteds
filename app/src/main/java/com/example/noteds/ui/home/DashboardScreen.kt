@@ -153,7 +153,7 @@ fun DashboardScreen(
                         // Accent Indicator
                         Box(
                             modifier = Modifier
-                                .align(Alignment.TopRight)
+                                .align(Alignment.TopEnd)
                                 .padding(24.dp)
                                 .size(12.dp)
                                 .clip(CircleShape)
