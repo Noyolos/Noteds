@@ -8,6 +8,7 @@ import com.example.noteds.data.model.CustomerWithBalance
 import com.example.noteds.data.repository.CustomerRepository
 import com.example.noteds.data.repository.LedgerRepository
 import java.util.Locale
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
@@ -97,4 +98,7 @@ class CustomerViewModel(
             ledgerRepository.insertEntry(entry)
         }
     }
+
+    fun entriesForCustomer(customerId: Long): Flow<List<LedgerEntryEntity>> =
+        ledgerRepository.getEntriesForCustomer(customerId)
 }

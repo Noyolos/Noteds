@@ -16,6 +16,7 @@ import com.example.noteds.ui.customers.CustomerListScreen
 import com.example.noteds.ui.customers.CustomerDetailScreen
 import com.example.noteds.ui.customers.CustomerViewModel
 import com.example.noteds.ui.home.DashboardScreen
+import com.example.noteds.ui.reports.ReportsScreen
 import com.example.noteds.ui.reports.ReportsViewModel
 import com.example.noteds.ui.theme.TealPrimary
 
@@ -27,21 +28,16 @@ fun AppRoot(
     // ... (前段不變) ...
     val destinations = remember {
         listOf(
-            BottomDestination("首页", Icons.Default.Home),
+            BottomDestination("首頁", Icons.Default.Home),
             BottomDestination("客人", Icons.Default.People),
-            BottomDestination("报表", Icons.Default.BarChart)
+            BottomDestination("報表", Icons.Default.BarChart)
         )
     }
     val selectedIndex = rememberSaveable { mutableIntStateOf(0) }
     val selectedCustomerId = rememberSaveable { mutableStateOf<Long?>(null) }
+    val customers by customerViewModel.customersWithBalance.collectAsState()
 
-    if (selectedCustomerId.value != null) {
-        CustomerDetailScreen(
-            customerId = selectedCustomerId.value!!,
-            customerViewModel = customerViewModel,
-            onClose = { selectedCustomerId.value = null }
-        )
-    } else {
+    Box(modifier = Modifier.fillMaxSize()) {
         Scaffold(
             bottomBar = {
                 NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
@@ -69,18 +65,28 @@ fun AppRoot(
                 when (selectedIndex.intValue) {
                     0 -> DashboardScreen(
                         reportsViewModel = reportsViewModel,
-                        onCustomerClick = { id -> selectedCustomerId.value = id } // 連接這裡！
+                        customers = customers,
+                        onCustomerClick = { id -> selectedCustomerId.value = id }
                     )
+
                     1 -> CustomerListScreen(
                         customerViewModel = customerViewModel,
                         onCustomerClick = { selectedCustomerId.value = it.customer.id }
                     )
-                    2 -> DashboardScreen(
-                        reportsViewModel = reportsViewModel,
-                        onCustomerClick = { id -> selectedCustomerId.value = id }
+
+                    2 -> ReportsScreen(
+                        reportsViewModel = reportsViewModel
                     )
                 }
             }
+        }
+
+        selectedCustomerId.value?.let { id ->
+            CustomerDetailScreen(
+                customerId = id,
+                customerViewModel = customerViewModel,
+                onClose = { selectedCustomerId.value = null }
+            )
         }
     }
 }
