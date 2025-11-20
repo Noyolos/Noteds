@@ -10,6 +10,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -50,64 +51,94 @@ fun CustomerListScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Customers", color = TextWhite, fontWeight = FontWeight.Bold) },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MidnightBlue)
-            )
+            // Custom Header matching HTML
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(MidnightBlue)
+                    .statusBarsPadding()
+                    .padding(bottom = 24.dp)
+                    .clip(RoundedCornerShape(bottomStart = 30.dp, bottomEnd = 30.dp))
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 16.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "客戶名錄",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = TextWhite
+                    )
+                }
+
+                // Search Bar inside Header
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp)
+                ) {
+                    TextField(
+                        value = searchQuery,
+                        onValueChange = { searchQuery = it },
+                        placeholder = { Text("搜尋姓名或電話...", color = TextWhite.copy(alpha = 0.5f)) },
+                        leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = TextWhite) },
+                        trailingIcon = if (searchQuery.isNotEmpty()) {
+                            {
+                                IconButton(onClick = { searchQuery = "" }) {
+                                    Icon(Icons.Default.Close, contentDescription = null, tint = TextWhite)
+                                }
+                            }
+                        } else null,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(Color.White.copy(alpha = 0.1f)),
+                        colors = TextFieldDefaults.colors(
+                            focusedContainerColor = Color.Transparent,
+                            unfocusedContainerColor = Color.Transparent,
+                            focusedTextColor = TextWhite,
+                            unfocusedTextColor = TextWhite,
+                            focusedIndicatorColor = Color.Transparent,
+                            unfocusedIndicatorColor = Color.Transparent,
+                            cursorColor = TextWhite
+                        ),
+                        singleLine = true
+                    )
+                }
+            }
         },
         floatingActionButton = {
             FloatingActionButton(
                 onClick = onAddCustomerClick,
                 containerColor = VibrantOrange,
-                contentColor = TextWhite
+                contentColor = TextWhite,
+                shape = CircleShape,
+                modifier = Modifier.size(56.dp)
             ) {
-                Icon(Icons.Default.Add, contentDescription = "Add")
+                Icon(Icons.Default.Add, contentDescription = "Add", modifier = Modifier.size(28.dp))
             }
         },
         containerColor = BackgroundColor
     ) { padding ->
-        Column(
+        LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
+                .padding(padding),
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // Search Bar
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = CardSurface),
-                elevation = CardDefaults.cardElevation(4.dp)
-            ) {
-                OutlinedTextField(
-                    value = searchQuery,
-                    onValueChange = { searchQuery = it },
-                    placeholder = { Text("Search name or phone", color = TextSecondary) },
-                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = TextSecondary) },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = Color.Transparent,
-                        unfocusedBorderColor = Color.Transparent
-                    ),
-                    singleLine = true
+            items(
+                items = filteredCustomers,
+                key = { it.customer.id }
+            ) { item ->
+                CustomerCard(
+                    item = item,
+                    formatter = currencyFormatter,
+                    onClick = { onCustomerClick(item) }
                 )
-            }
-
-            LazyColumn(
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                items(
-                    items = filteredCustomers,
-                    key = { it.customer.id }
-                ) { item ->
-                    CustomerCard(
-                        item = item,
-                        formatter = currencyFormatter,
-                        onClick = { onCustomerClick(item) }
-                    )
-                }
             }
         }
     }
@@ -125,60 +156,66 @@ fun CustomerCard(
             .clickable(onClick = onClick),
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = CardSurface),
-        elevation = CardDefaults.cardElevation(2.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp) // shadow-soft
     ) {
         Row(
             modifier = Modifier
-                .padding(20.dp)
+                .padding(16.dp)
                 .fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(
                 modifier = Modifier
-                    .size(56.dp)
+                    .size(48.dp)
                     .clip(CircleShape)
-                    .background(BackgroundColor),
+                    .background(MidnightBlue.copy(alpha = 0.05f)),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
                     text = item.customer.name.take(1).uppercase(),
-                    style = MaterialTheme.typography.titleLarge,
+                    style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = MidnightBlue
                 )
             }
 
-            Spacer(modifier = Modifier.width(20.dp))
+            Spacer(modifier = Modifier.width(16.dp))
 
             Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = item.customer.name,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = TextPrimary
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "ID: ...${item.customer.id.toString().takeLast(4).padStart(4, '0')}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = TextSecondary
-                )
-            }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = item.customer.name,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MidnightBlue
+                    )
+                    Spacer(modifier = Modifier.weight(1f))
+                    Icon(
+                        Icons.Default.ChevronRight,
+                        contentDescription = null,
+                        tint = Color.LightGray,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
 
-            Column(horizontalAlignment = Alignment.End) {
-                Text(
-                    text = formatter.format(item.balance),
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = if (item.balance > 0) DebtColor else PaymentColor,
-                    fontWeight = FontWeight.Bold
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Icon(
-                    Icons.Default.ChevronRight,
-                    contentDescription = null,
-                    tint = TextSecondary,
-                    modifier = Modifier.size(20.dp)
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = item.customer.phone,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextSecondary
+                    )
+
+                    Text(
+                        text = if (item.balance > 0) "欠 ${formatter.format(item.balance)}" else "無欠款",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = if (item.balance > 0) DebtColor else PaymentColor,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
         }
     }

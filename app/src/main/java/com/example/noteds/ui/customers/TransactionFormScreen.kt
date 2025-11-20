@@ -10,6 +10,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -37,7 +38,10 @@ fun TransactionFormScreen(
 ) {
     var amount by remember { mutableStateOf("") }
     var note by remember { mutableStateOf("") }
-    var paymentMethod by remember { mutableStateOf("CASH") } // CASH or TRANSFER
+    var paymentMethod by remember { mutableStateOf("CASH") } // CASH, TNG, BANK_TRANSFER
+
+    var smartInput by remember { mutableStateOf("") }
+    var isParsing by remember { mutableStateOf(false) }
 
     // Date Picker State
     var showDatePicker by remember { mutableStateOf(false) }
@@ -50,8 +54,8 @@ fun TransactionFormScreen(
 
     val isDebt = transactionType == "DEBT"
     val primaryColor = if (isDebt) DebtColor else PaymentColor
-    val title = if (isDebt) "New Debt" else "New Repayment"
-    val buttonText = if (isDebt) "Record Debt" else "Record Payment"
+    val title = if (isDebt) "新增賒賬" else "登記還款"
+    val buttonText = if (isDebt) "確認保存" else "確認保存"
 
     Scaffold(
         topBar = {
@@ -99,10 +103,78 @@ fun TransactionFormScreen(
                 fontWeight = FontWeight.Bold
             )
 
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Customer Card (Small)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(BackgroundColor, RoundedCornerShape(16.dp))
+                    .padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                 Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(CardSurface),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(customer.name.take(1).uppercase(), color = MidnightBlue, fontWeight = FontWeight.Bold)
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                Column {
+                    Text("交易對象", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+                    Text(customer.name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = MidnightBlue)
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // AI Smart Input
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Star, contentDescription = null, tint = VibrantOrange, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("AI 智慧輸入", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = VibrantOrange)
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(modifier = Modifier.fillMaxWidth()) {
+                    OutlinedTextField(
+                        value = smartInput,
+                        onValueChange = { smartInput = it },
+                        placeholder = { Text("試試輸入：三包米 45塊", style = MaterialTheme.typography.bodySmall, color = TextSecondary.copy(alpha = 0.5f)) },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = VibrantOrange,
+                            unfocusedBorderColor = VibrantOrange.copy(alpha = 0.2f),
+                            focusedContainerColor = VibrantOrange.copy(alpha = 0.05f),
+                            unfocusedContainerColor = VibrantOrange.copy(alpha = 0.05f)
+                        ),
+                        textStyle = MaterialTheme.typography.bodySmall
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Button(
+                        onClick = {
+                            isParsing = true
+                            // Mock parsing logic
+                            isParsing = false
+                        },
+                        modifier = Modifier.height(56.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = VibrantOrange),
+                        shape = RoundedCornerShape(12.dp),
+                        enabled = smartInput.isNotBlank() && !isParsing
+                    ) {
+                        Text(if(isParsing) "..." else "AI 填單", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+
             Spacer(modifier = Modifier.height(32.dp))
 
             // Large Amount Input
-            Text("RM", style = MaterialTheme.typography.titleLarge, color = TextSecondary)
+            Text("金額 (RM)", style = MaterialTheme.typography.labelSmall, color = TextSecondary, fontWeight = FontWeight.Bold)
             TextField(
                 value = amount,
                 onValueChange = { amount = it },
@@ -133,37 +205,20 @@ fun TransactionFormScreen(
 
             Spacer(modifier = Modifier.height(32.dp))
 
-            // Date
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(BackgroundColor)
-                    .clickable { showDatePicker = true }
-                    .padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text("Date", color = TextSecondary, fontWeight = FontWeight.Medium)
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(selectedDate, color = TextPrimary, fontWeight = FontWeight.Bold)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Icon(Icons.Default.CalendarToday, contentDescription = null, tint = TextPrimary, modifier = Modifier.size(20.dp))
-                }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Note
+            // Note & Date
+            Text("備註 / 商品", style = MaterialTheme.typography.labelSmall, color = TextSecondary, fontWeight = FontWeight.Bold, modifier = Modifier.align(Alignment.Start))
+            Spacer(modifier = Modifier.height(8.dp))
             OutlinedTextField(
                 value = note,
                 onValueChange = { note = it },
-                label = { Text("Note (Optional)") },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
+                placeholder = { Text(if (isDebt) "例如：5包米，2箱水..." else "例如：現金還款...", color = TextSecondary.copy(alpha = 0.5f)) },
+                modifier = Modifier.fillMaxWidth().height(100.dp),
+                shape = RoundedCornerShape(16.dp),
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = primaryColor,
-                    unfocusedBorderColor = TextSecondary.copy(alpha = 0.3f)
+                    focusedContainerColor = BackgroundColor,
+                    unfocusedContainerColor = BackgroundColor,
+                    focusedBorderColor = Color.Transparent,
+                    unfocusedBorderColor = Color.Transparent
                 )
             )
 
@@ -172,20 +227,27 @@ fun TransactionFormScreen(
                 Spacer(modifier = Modifier.height(24.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    horizontalArrangement = Arrangement.spacedBy(8.dp) // Changed to 8.dp for tighter spacing
                 ) {
                     PaymentMethodOption(
-                        label = "Cash",
+                        label = "現金",
                         selected = paymentMethod == "CASH",
                         color = primaryColor,
                         onClick = { paymentMethod = "CASH" },
                         modifier = Modifier.weight(1f)
                     )
                     PaymentMethodOption(
-                        label = "Transfer",
-                        selected = paymentMethod == "TRANSFER",
+                        label = "TNG",
+                        selected = paymentMethod == "TNG",
                         color = primaryColor,
-                        onClick = { paymentMethod = "TRANSFER" },
+                        onClick = { paymentMethod = "TNG" },
+                        modifier = Modifier.weight(1f)
+                    )
+                    PaymentMethodOption(
+                        label = "轉賬",
+                        selected = paymentMethod == "BANK_TRANSFER",
+                        color = primaryColor,
+                        onClick = { paymentMethod = "BANK_TRANSFER" },
                         modifier = Modifier.weight(1f)
                     )
                 }
@@ -232,15 +294,16 @@ fun PaymentMethodOption(
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
             if (selected) {
                 Icon(Icons.Default.Check, null, tint = color, modifier = Modifier.size(16.dp))
-                Spacer(modifier = Modifier.width(8.dp))
+                Spacer(modifier = Modifier.width(4.dp))
             }
             Text(
                 text = label,
                 color = if (selected) color else TextSecondary,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
+                fontSize = 12.sp // Smaller text to fit 3 options
             )
         }
     }

@@ -4,7 +4,6 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
@@ -40,7 +39,7 @@ fun ReportsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Financial Reports", color = TextWhite, fontWeight = FontWeight.Bold) },
+                title = { Text("財務報表", color = TextWhite, fontWeight = FontWeight.Bold) },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MidnightBlue)
             )
         },
@@ -54,53 +53,85 @@ fun ReportsScreen(
                 .padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(24.dp)
         ) {
-            // Insight Cards
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                InsightCard(
-                    title = "Total Trans.",
-                    value = totalTransactions.toString(),
-                    modifier = Modifier.weight(1f)
-                )
-                InsightCard(
-                    title = "Avg Collection",
-                    value = "12 Days", // Mocked calculation
-                    modifier = Modifier.weight(1f)
-                )
+             // Header Title inside body to match HTML style
+            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
+                 // HTML has header "財務報表" and subtitle "全面經營分析" inside the blue header.
+                 // In Compose, I put "財務報表" in TopAppBar.
+                 // I can add subtitle here or rely on TopAppBar.
+                 // HTML style has centered text.
             }
 
             // Monthly Bar Chart
-            ChartCard("Last 6 Months (Debt vs Payment)") {
-                MonthlyBarChart(stats = monthlyStats, modifier = Modifier.fillMaxWidth().height(200.dp))
+            ChartCard("每月賒賬 vs 還款") {
+                MonthlyBarChart(stats = monthlyStats, modifier = Modifier.fillMaxWidth().height(240.dp))
             }
 
             // Aging Distribution
-            ChartCard("Debt Aging Distribution") {
+            ChartCard("賬齡分佈 (0-90+天)") {
                 AgingDonutChart(stats = agingStats, modifier = Modifier.fillMaxWidth().height(200.dp))
+
+                // Legend
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    agingStats.forEach { stat ->
+                         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 8.dp)) {
+                            Box(modifier = Modifier.size(12.dp).background(Color(stat.colorHex), androidx.compose.foundation.shape.CircleShape))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            // Extract "0-30" from "0-30 Days"
+                            val label = stat.bucket.replace(" Days", "")
+                            Text(label, style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+                        }
+                    }
+                }
             }
 
             // Top Debtors Visualization
-            ChartCard("Top Debtors Analysis") {
+            ChartCard("Top 欠款客戶") {
                 TopDebtorsHorizontalChart(debtors = topDebtors, currencyFormatter = currencyFormatter)
+            }
+
+            // Insight Cards
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                 InsightCard(
+                    title = "本月總流水",
+                    value = "$totalTransactions 筆",
+                    borderColor = MidnightBlue
+                )
+                InsightCard(
+                    title = "平均回款週期",
+                    value = "12 天",
+                    borderColor = VibrantOrange
+                )
             }
         }
     }
 }
 
 @Composable
-fun InsightCard(title: String, value: String, modifier: Modifier) {
+fun InsightCard(title: String, value: String, borderColor: Color) {
     Card(
-        modifier = modifier,
+        modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = CardSurface),
         elevation = CardDefaults.cardElevation(2.dp)
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(title, style = MaterialTheme.typography.bodySmall, color = TextSecondary)
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(value, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = MidnightBlue)
+        Row(
+            modifier = Modifier.padding(20.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .width(4.dp)
+                    .height(40.dp)
+                    .background(borderColor, RoundedCornerShape(2.dp))
+            )
+            Spacer(modifier = Modifier.width(16.dp))
+            Column {
+                Text(title, style = MaterialTheme.typography.labelSmall, color = TextSecondary, fontWeight = FontWeight.Medium)
+                Text(value, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = if(borderColor == MidnightBlue) MidnightBlue else VibrantOrange)
+            }
         }
     }
 }
@@ -109,12 +140,18 @@ fun InsightCard(title: String, value: String, modifier: Modifier) {
 fun ChartCard(title: String, content: @Composable () -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(containerColor = CardSurface),
-        elevation = CardDefaults.cardElevation(2.dp)
+        elevation = CardDefaults.cardElevation(4.dp) // shadow-soft
     ) {
-        Column(modifier = Modifier.padding(20.dp)) {
-            Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = TextPrimary)
+        Column(modifier = Modifier.padding(24.dp)) {
+            Text(
+                title,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MidnightBlue,
+                modifier = Modifier.fillMaxWidth().wrapContentWidth(Alignment.CenterHorizontally)
+            )
             Spacer(modifier = Modifier.height(24.dp))
             content()
         }
@@ -123,77 +160,98 @@ fun ChartCard(title: String, content: @Composable () -> Unit) {
 
 @Composable
 fun MonthlyBarChart(stats: List<MonthlyStats>, modifier: Modifier) {
+    // ... (Same logic, maybe colors check)
+    // HTML colors: Debt #D50000, Payment #00C853
+    // My Color.kt: DebtColor=#D50000, PaymentColor=#00C853. Correct.
+
     if (stats.isEmpty()) return
 
     Canvas(modifier = modifier) {
         val maxVal = stats.maxOfOrNull { maxOf(it.debt, it.payment) }?.toFloat() ?: 1f
-        val barWidth = size.width / (stats.size * 3) // Space for 2 bars + gap
+        // In HTML chart.js, bars are side-by-side per month.
+        // Here we draw them.
+        val groupWidth = size.width / stats.size
+        val barWidth = groupWidth * 0.35f
+        val gap = groupWidth * 0.1f
         val height = size.height
 
         stats.forEachIndexed { index, stat ->
-            val x = index * (size.width / stats.size) + barWidth / 2
+            val centerX = index * groupWidth + groupWidth / 2
 
-            // Debt Bar
-            val debtHeight = (stat.debt.toFloat() / maxVal) * height
-            drawRoundRect(
-                color = DebtColor,
-                topLeft = Offset(x, height - debtHeight),
-                size = Size(barWidth, debtHeight),
-                cornerRadius = CornerRadius(4.dp.toPx())
-            )
+            // Debt Bar (Left)
+            val debtHeight = (stat.debt.toFloat() / maxVal) * height * 0.9f // Scale 0.9 to leave top space
+            if (debtHeight > 0) {
+                drawRoundRect(
+                    color = DebtColor,
+                    topLeft = Offset(centerX - barWidth - gap/2, height - debtHeight),
+                    size = Size(barWidth, debtHeight),
+                    cornerRadius = CornerRadius(4.dp.toPx())
+                )
+            }
 
-            // Payment Bar
-            val paymentHeight = (stat.payment.toFloat() / maxVal) * height
-            drawRoundRect(
-                color = PaymentColor,
-                topLeft = Offset(x + barWidth, height - paymentHeight),
-                size = Size(barWidth, paymentHeight),
-                cornerRadius = CornerRadius(4.dp.toPx())
-            )
+            // Payment Bar (Right)
+            val paymentHeight = (stat.payment.toFloat() / maxVal) * height * 0.9f
+            if (paymentHeight > 0) {
+                 drawRoundRect(
+                    color = PaymentColor,
+                    topLeft = Offset(centerX + gap/2, height - paymentHeight),
+                    size = Size(barWidth, paymentHeight),
+                    cornerRadius = CornerRadius(4.dp.toPx())
+                )
+            }
         }
+        // Axis line?
+        drawLine(
+            color = Color.LightGray.copy(alpha=0.5f),
+            start = Offset(0f, height),
+            end = Offset(size.width, height),
+            strokeWidth = 1.dp.toPx()
+        )
     }
 }
 
 @Composable
 fun AgingDonutChart(stats: List<AgingData>, modifier: Modifier) {
     if (stats.isEmpty()) return
-
     val total = stats.sumOf { it.amount }
     if (total == 0.0) return
 
-    Row(
-        modifier = modifier,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
-            Canvas(modifier = Modifier.size(160.dp)) {
-                var startAngle = -90f
-                val strokeWidth = 40f
+    // HTML Colors:
+    // 0-30: #4CAF50 (Green)
+    // 31-60: #FFC107 (Amber)
+    // 61-90: #FF9800 (Orange)
+    // 90+: #F44336 (Red)
 
-                stats.forEach { stat ->
-                    val sweepAngle = ((stat.amount / total) * 360).toFloat()
-                    drawArc(
-                        color = Color(stat.colorHex),
-                        startAngle = startAngle,
-                        sweepAngle = sweepAngle,
-                        useCenter = false,
-                        style = Stroke(width = strokeWidth)
-                    )
-                    startAngle += sweepAngle
-                }
+    // Override colors locally to match HTML strictly if not matched in VM
+    // VM uses: 0xFF00C853, 0xFFFFAB00, 0xFFFF6D00, 0xFFD50000
+    // HTML uses: #4CAF50, #FFC107, #FF9800, #F44336
+    // I will update logic to use these specific colors.
+
+    val colors = listOf(
+        Color(0xFF4CAF50),
+        Color(0xFFFFC107),
+        Color(0xFFFF9800),
+        Color(0xFFF44336)
+    )
+
+    Box(modifier = modifier, contentAlignment = Alignment.Center) {
+        Canvas(modifier = Modifier.size(180.dp)) { // Size similar to HTML h-48
+            var startAngle = -90f
+            val strokeWidth = 40.dp.toPx() // thicker
+
+            stats.forEachIndexed { index, stat ->
+                val sweepAngle = ((stat.amount / total) * 360).toFloat()
+                drawArc(
+                    color = colors.getOrElse(index) { Color.Gray },
+                    startAngle = startAngle,
+                    sweepAngle = sweepAngle,
+                    useCenter = false,
+                    style = Stroke(width = strokeWidth)
+                )
+                startAngle += sweepAngle
             }
         }
-
-        Column(modifier = Modifier.weight(0.8f)) {
-            stats.forEach { stat ->
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(modifier = Modifier.size(12.dp).background(Color(stat.colorHex), CircleShape))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(stat.bucket, style = MaterialTheme.typography.bodySmall, color = TextSecondary)
-                }
-                Spacer(modifier = Modifier.height(4.dp))
-            }
-        }
+        // Cutout center text? HTML doesn't seem to have text inside aging chart, only legend below.
     }
 }
 
@@ -202,27 +260,27 @@ fun TopDebtorsHorizontalChart(debtors: List<DebtorData>, currencyFormatter: Numb
     if (debtors.isEmpty()) return
     val maxAmount = debtors.maxOf { it.amount }
 
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         debtors.take(5).forEach { debtor ->
             Column {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text(debtor.name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                    Text(debtor.name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = MidnightBlue)
                     Text(currencyFormatter.format(debtor.amount), style = MaterialTheme.typography.bodyMedium, color = DebtColor, fontWeight = FontWeight.Bold)
                 }
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(6.dp))
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(8.dp)
+                        .height(12.dp) // Thicker bars
                         .background(BackgroundColor, RoundedCornerShape(4.dp))
                 ) {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth((debtor.amount / maxAmount).toFloat())
-                            .height(8.dp)
+                            .height(12.dp)
                             .background(MidnightBlue, RoundedCornerShape(4.dp))
                     )
                 }
