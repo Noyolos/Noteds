@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import java.util.Calendar
 
 // 定義一個簡單的資料類別給排行榜用，包含 ID
 data class DebtorData(
@@ -60,6 +61,48 @@ class ReportsViewModel(
             started = SharingStarted.WhileSubscribed(5_000),
             initialValue = emptyList()
         )
+
+    // Debt this Month
+    val debtThisMonth: StateFlow<Double> = ledgerRepository.getAllEntries()
+        .map { entries ->
+            val (start, end) = getMonthRange()
+            entries.filter { it.timestamp in start..end && it.type.uppercase() == "DEBT" }
+                .sumOf { it.amount }
+        }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000),
+            initialValue = 0.0
+        )
+
+    // Repayment this Month
+    val repaymentThisMonth: StateFlow<Double> = ledgerRepository.getAllEntries()
+        .map { entries ->
+            val (start, end) = getMonthRange()
+            entries.filter { it.timestamp in start..end && it.type.uppercase() == "PAYMENT" }
+                .sumOf { it.amount }
+        }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000),
+            initialValue = 0.0
+        )
+
+    private fun getMonthRange(): Pair<Long, Long> {
+        val calendar = Calendar.getInstance()
+        calendar.set(Calendar.DAY_OF_MONTH, 1)
+        calendar.set(Calendar.HOUR_OF_DAY, 0)
+        calendar.set(Calendar.MINUTE, 0)
+        calendar.set(Calendar.SECOND, 0)
+        calendar.set(Calendar.MILLISECOND, 0)
+        val start = calendar.timeInMillis
+
+        calendar.add(Calendar.MONTH, 1)
+        calendar.add(Calendar.MILLISECOND, -1)
+        val end = calendar.timeInMillis
+
+        return Pair(start, end)
+    }
 
     private fun combineCustomerBalances(
         customersFlow: Flow<List<CustomerEntity>>,

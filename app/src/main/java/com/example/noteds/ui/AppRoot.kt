@@ -75,9 +75,8 @@ fun AppRoot(
                         customerViewModel = customerViewModel,
                         onCustomerClick = { selectedCustomerId.value = it.customer.id }
                     )
-                    2 -> DashboardScreen(
-                        reportsViewModel = reportsViewModel,
-                        onCustomerClick = { id -> selectedCustomerId.value = id }
+                    2 -> com.example.noteds.ui.reports.ReportsScreen(
+                        reportsViewModel = reportsViewModel
                     )
                 }
             }

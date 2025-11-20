@@ -30,10 +30,13 @@ import java.util.Locale
 @Composable
 fun DashboardScreen(
     reportsViewModel: ReportsViewModel,
-    onCustomerClick: (Long) -> Unit // 新增回調函數
+    onCustomerClick: (Long) -> Unit
 ) {
     val totalDebt by reportsViewModel.totalDebt.collectAsState()
     val topDebtors by reportsViewModel.topDebtors.collectAsState()
+    val debtThisMonth by reportsViewModel.debtThisMonth.collectAsState()
+    val repaymentThisMonth by reportsViewModel.repaymentThisMonth.collectAsState()
+
     val currencyFormatter = remember { NumberFormat.getCurrencyInstance(Locale.getDefault()) }
 
     Scaffold(
@@ -86,13 +89,13 @@ fun DashboardScreen(
                 ) {
                     StatCard(
                         title = "本月赊账",
-                        amount = "RM 455.00",
+                        amount = currencyFormatter.format(debtThisMonth),
                         amountColor = DebtRed,
                         modifier = Modifier.weight(1f)
                     )
                     StatCard(
                         title = "本月已还",
-                        amount = "RM 120.00",
+                        amount = currencyFormatter.format(repaymentThisMonth),
                         amountColor = PaymentGreen,
                         modifier = Modifier.weight(1f)
                     )
@@ -112,14 +115,14 @@ fun DashboardScreen(
             // 4. Top Debtors List
             items(
                 items = topDebtors,
-                key = { it.id } // 使用 ID 作為 Key
+                key = { it.id }
             ) { debtor ->
                 Card(
                     colors = CardDefaults.cardColors(containerColor = Color.White),
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { onCustomerClick(debtor.id) }, // 點擊事件
+                        .clickable { onCustomerClick(debtor.id) },
                     elevation = CardDefaults.cardElevation(1.dp)
                 ) {
                     Row(

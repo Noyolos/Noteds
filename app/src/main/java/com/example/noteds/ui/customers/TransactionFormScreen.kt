@@ -1,6 +1,6 @@
-package com.example.noteds.ui.components
+package com.example.noteds.ui.customers
 
-import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -20,6 +20,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.noteds.data.entity.CustomerEntity
 import com.example.noteds.ui.theme.*
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -27,11 +30,19 @@ fun TransactionFormScreen(
     customer: CustomerEntity,
     transactionType: String, // "DEBT" or "PAYMENT"
     onBack: () -> Unit,
-    onSave: (Double, String) -> Unit
+    onSave: (Double, String, Long) -> Unit
 ) {
     var amount by remember { mutableStateOf("") }
     var note by remember { mutableStateOf("") }
-    var date by remember { mutableStateOf("19/11/2025") } // Mock date
+
+    // Date Picker State
+    var showDatePicker by remember { mutableStateOf(false) }
+    val datePickerState = rememberDatePickerState(initialSelectedDateMillis = System.currentTimeMillis())
+    val dateFormatter = remember { SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()) }
+
+    val selectedDate = datePickerState.selectedDateMillis?.let {
+        dateFormatter.format(Date(it))
+    } ?: dateFormatter.format(Date())
 
     // UI Text Configuration
     val isDebt = transactionType == "DEBT"
@@ -54,7 +65,8 @@ fun TransactionFormScreen(
             Button(
                 onClick = {
                     val value = amount.toDoubleOrNull()
-                    if (value != null) onSave(value, note)
+                    val timestamp = datePickerState.selectedDateMillis ?: System.currentTimeMillis()
+                    if (value != null) onSave(value, note, timestamp)
                 },
                 modifier = Modifier
                     .fillMaxWidth()
@@ -107,15 +119,26 @@ fun TransactionFormScreen(
             // Date Input
             InputLabel("日期")
             OutlinedTextField(
-                value = date,
-                onValueChange = { date = it },
-                modifier = Modifier.fillMaxWidth(),
-                trailingIcon = { Icon(Icons.Default.CalendarToday, null) },
+                value = selectedDate,
+                onValueChange = { },
+                readOnly = true,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { showDatePicker = true },
+                enabled = false, // Disable direct editing, rely on click
+                trailingIcon = {
+                    IconButton(onClick = { showDatePicker = true }) {
+                        Icon(Icons.Default.CalendarToday, null)
+                    }
+                },
                 shape = RoundedCornerShape(12.dp),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedBorderColor = TealPrimary,
                     unfocusedContainerColor = Color.White,
-                    focusedContainerColor = Color.White
+                    focusedContainerColor = Color.White,
+                    disabledContainerColor = Color.White,
+                    disabledTextColor = TextBlack,
+                    disabledBorderColor = TextGray.copy(alpha = 0.5f)
                 )
             )
 
@@ -177,6 +200,24 @@ fun TransactionFormScreen(
                     Spacer(modifier = Modifier.width(8.dp))
                     Text("转账", color = Color.Gray)
                 }
+            }
+        }
+
+        if (showDatePicker) {
+            DatePickerDialog(
+                onDismissRequest = { showDatePicker = false },
+                confirmButton = {
+                    TextButton(onClick = { showDatePicker = false }) {
+                        Text("确定", color = TealPrimary)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showDatePicker = false }) {
+                        Text("取消", color = TealPrimary)
+                    }
+                }
+            ) {
+                DatePicker(state = datePickerState)
             }
         }
     }

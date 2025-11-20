@@ -9,6 +9,7 @@ import com.example.noteds.data.repository.CustomerRepository
 import com.example.noteds.data.repository.LedgerRepository
 import java.util.Locale
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -17,6 +18,9 @@ class CustomerViewModel(
     private val customerRepository: CustomerRepository,
     private val ledgerRepository: LedgerRepository
 ) : ViewModel() {
+
+    fun getTransactionsForCustomer(customerId: Long): Flow<List<LedgerEntryEntity>> =
+        ledgerRepository.getEntriesForCustomer(customerId)
 
     val customersWithBalance: StateFlow<List<CustomerWithBalance>> =
         customerRepository.getCustomersWithBalance()
@@ -84,14 +88,15 @@ class CustomerViewModel(
         customerId: Long,
         type: String,
         amount: Double,
-        note: String?
+        note: String?,
+        timestamp: Long = System.currentTimeMillis()
     ) {
         viewModelScope.launch {
             val entry = LedgerEntryEntity(
                 customerId = customerId,
                 type = type.uppercase(Locale.US),
                 amount = amount,
-                timestamp = System.currentTimeMillis(),
+                timestamp = timestamp,
                 note = note
             )
             ledgerRepository.insertEntry(entry)

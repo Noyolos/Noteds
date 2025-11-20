@@ -4,12 +4,13 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.*
-import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset // ★ 修正了這裡
+import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -18,9 +19,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.noteds.ui.components.TransactionFormScreen
 import com.example.noteds.ui.theme.*
 import java.text.NumberFormat
+import java.text.SimpleDateFormat
+import java.util.Date
 import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -33,6 +35,11 @@ fun CustomerDetailScreen(
     val customers by customerViewModel.customersWithBalance.collectAsState()
     val selected = customers.firstOrNull { it.customer.id == customerId }
     val currencyFormatter = remember { NumberFormat.getCurrencyInstance(Locale.getDefault()) }
+    val dateFormatter = remember { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()) }
+
+    // Fetch transactions
+    val transactions by customerViewModel.getTransactionsForCustomer(customerId)
+        .collectAsState(initial = emptyList())
 
     var showTransactionForm by remember { mutableStateOf<String?>(null) }
 
@@ -46,8 +53,8 @@ fun CustomerDetailScreen(
             customer = selected.customer,
             transactionType = showTransactionForm!!,
             onBack = { showTransactionForm = null },
-            onSave = { amount, note ->
-                customerViewModel.addLedgerEntry(customerId, showTransactionForm!!, amount, note)
+            onSave = { amount, note, timestamp ->
+                customerViewModel.addLedgerEntry(customerId, showTransactionForm!!, amount, note, timestamp)
                 showTransactionForm = null
             }
         )
@@ -155,7 +162,9 @@ fun CustomerDetailScreen(
                                 fontWeight = FontWeight.Bold
                             )
                             Spacer(modifier = Modifier.height(8.dp))
-                            Text("最后还钱: 2025-10-28", color = TextGray, fontSize = 14.sp)
+                            val lastTransaction = transactions.maxByOrNull { it.timestamp }
+                            val lastDate = if (lastTransaction != null) dateFormatter.format(Date(lastTransaction.timestamp)) else "无记录"
+                            Text("最后还钱: $lastDate", color = TextGray, fontSize = 14.sp)
                         }
                     }
                 }
@@ -177,7 +186,7 @@ fun CustomerDetailScreen(
                     }
                 }
 
-                items(3) {
+                items(transactions.sortedByDescending { it.timestamp }) { transaction ->
                     Card(
                         colors = CardDefaults.cardColors(containerColor = Color.White),
                         shape = RoundedCornerShape(12.dp),
@@ -194,27 +203,28 @@ fun CustomerDetailScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Column {
-                                Text("2025-11-08", color = TextGray, fontSize = 14.sp)
+                                Text(dateFormatter.format(Date(transaction.timestamp)), color = TextGray, fontSize = 14.sp)
                                 Spacer(modifier = Modifier.height(8.dp))
                                 Row(verticalAlignment = Alignment.CenterVertically) {
+                                    val isDebt = transaction.type == "DEBT"
                                     Surface(
-                                        color = DebtRed,
+                                        color = if (isDebt) DebtRed else PaymentGreen,
                                         shape = RoundedCornerShape(4.dp),
                                         modifier = Modifier.padding(end = 8.dp)
                                     ) {
                                         Text(
-                                            "赊账",
+                                            if (isDebt) "赊账" else "还款",
                                             color = Color.White,
                                             fontSize = 10.sp,
                                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                                         )
                                     }
-                                    Text("杂货", color = TextBlack)
+                                    Text(transaction.note ?: (if(isDebt) "商品" else "还款"), color = TextBlack)
                                 }
                             }
                             Text(
-                                "+RM 420.00",
-                                color = DebtRed,
+                                "${if (transaction.type == "DEBT") "+" else "-"} ${currencyFormatter.format(transaction.amount)}",
+                                color = if (transaction.type == "DEBT") DebtRed else PaymentGreen,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 18.sp
                             )
