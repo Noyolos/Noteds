@@ -20,7 +20,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -35,7 +34,6 @@ import com.example.noteds.ui.reports.ReportsViewModel
 import com.example.noteds.ui.theme.*
 import java.text.NumberFormat
 import java.util.Locale
-import kotlin.random.Random
 
 @Composable
 fun DashboardScreen(
@@ -54,12 +52,12 @@ fun DashboardScreen(
             .fillMaxSize()
             .background(BackgroundColor)
     ) {
-        // 1. Header Background Section (Custom Shape Container)
+        // 1. Header Background Section
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(280.dp)
-                .clip(RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp))
+                .clip(RoundedCornerShape(bottomStart = 30.dp, bottomEnd = 30.dp)) // Refined radius
                 .background(MidnightBlue)
         ) {
             // Header Content
@@ -73,15 +71,16 @@ fun DashboardScreen(
             ) {
                 Column {
                     Text(
-                        text = "Hello Boss 👋",
+                        text = "老闆，您好 👋",
                         color = TextWhite.copy(alpha = 0.8f),
-                        style = MaterialTheme.typography.titleMedium
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Medium
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "Overview",
+                        text = "今日賬務概覽",
                         color = TextWhite,
-                        style = MaterialTheme.typography.headlineMedium,
+                        style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.Bold
                     )
                 }
@@ -89,14 +88,15 @@ fun DashboardScreen(
                 IconButton(
                     onClick = { /* Notification Action */ },
                     modifier = Modifier
-                        .size(48.dp)
+                        .size(40.dp)
                         .clip(CircleShape)
                         .background(Color.White.copy(alpha = 0.1f))
                 ) {
                     Icon(
                         imageVector = Icons.Default.Notifications,
                         contentDescription = "Notifications",
-                        tint = TextWhite
+                        tint = TextWhite,
+                        modifier = Modifier.size(20.dp)
                     )
                 }
             }
@@ -106,22 +106,22 @@ fun DashboardScreen(
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize(),
-            contentPadding = PaddingValues(top = 140.dp, bottom = 100.dp),
+            contentPadding = PaddingValues(top = 130.dp, bottom = 100.dp), // Adjusted padding
             verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
-            // Hero Card (Total Outstanding Debt) with Trend Line
+            // Hero Card
             item {
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(180.dp)
-                        .padding(horizontal = 20.dp),
+                        .padding(horizontal = 24.dp),
                     shape = RoundedCornerShape(24.dp),
                     colors = CardDefaults.cardColors(containerColor = CardSurface),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 12.dp)
+                    elevation = CardDefaults.cardElevation(defaultElevation = 12.dp) // Shadow float
                 ) {
                     Box(modifier = Modifier.fillMaxSize()) {
-                        // Trend Line Background
+                        // Trend Line
                         TrendLineChart(
                             modifier = Modifier
                                 .fillMaxSize()
@@ -135,10 +135,11 @@ fun DashboardScreen(
                                 .align(Alignment.TopStart)
                         ) {
                             Text(
-                                text = "Total Outstanding Debt",
+                                text = "總待收回款項 (TOTAL DEBT)",
                                 color = TextSecondary,
-                                style = MaterialTheme.typography.labelLarge,
-                                fontWeight = FontWeight.SemiBold
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.SemiBold,
+                                letterSpacing = 1.sp
                             )
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(
@@ -146,40 +147,47 @@ fun DashboardScreen(
                                 color = MidnightBlue,
                                 style = MaterialTheme.typography.displaySmall,
                                 fontWeight = FontWeight.ExtraBold,
-                                fontSize = 36.sp
+                                fontSize = 32.sp
                             )
                         }
 
-                        // Accent Indicator
+                        // Icon Box
                         Box(
                             modifier = Modifier
                                 .align(Alignment.TopRight)
                                 .padding(24.dp)
-                                .size(12.dp)
-                                .clip(CircleShape)
-                                .background(VibrantOrange)
-                        )
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(VibrantOrange.copy(alpha = 0.1f))
+                                .padding(8.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.ArrowUpward, // Placeholder for TrendingUp
+                                contentDescription = null,
+                                tint = VibrantOrange,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
                     }
                 }
             }
 
-            // Stats Row
+            // Quick Stats
             item {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 20.dp),
+                        .padding(horizontal = 24.dp),
                     horizontalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     StatCard(
-                        title = "Debt This Month",
+                        title = "本月新增賒賬",
                         amount = currencyFormatter.format(debtThisMonth),
                         amountColor = DebtColor,
                         icon = Icons.Default.ArrowUpward,
                         modifier = Modifier.weight(1f)
                     )
                     StatCard(
-                        title = "Repayment",
+                        title = "本月已收回款",
                         amount = currencyFormatter.format(repaymentThisMonth),
                         amountColor = PaymentColor,
                         icon = Icons.Default.ArrowDownward,
@@ -198,18 +206,18 @@ fun DashboardScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "Top Debtors",
-                        color = TextPrimary,
-                        style = MaterialTheme.typography.titleLarge,
+                        text = "重點關注 (Top Debtors)",
+                        color = MidnightBlue,
+                        style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
-                    TextButton(onClick = { /* View All */ }) {
-                        Text(
-                            text = "See All",
-                            color = VibrantOrange,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
+                    Text(
+                        text = "查看全部",
+                        color = VibrantOrange,
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.clickable { /* View All */ }
+                    )
                 }
             }
 
@@ -236,11 +244,7 @@ fun TrendLineChart(
     Canvas(modifier = modifier) {
         val width = size.width
         val height = size.height
-
-        // Simulate trend points (mock data for visualization)
-        // In a real app, pass points from ViewModel
         val points = listOf(0.8f, 0.6f, 0.7f, 0.4f, 0.5f, 0.2f, 0.3f)
-
         val path = Path()
         val stepX = width / (points.size - 1)
 
@@ -250,7 +254,6 @@ fun TrendLineChart(
             if (index == 0) {
                 path.moveTo(x, y)
             } else {
-                // Smooth curve
                 val prevX = (index - 1) * stepX
                 val prevY = height * points[index - 1]
                 val controlX1 = prevX + stepX / 2
@@ -259,7 +262,6 @@ fun TrendLineChart(
             }
         }
 
-        // Draw gradient fill below line
         val fillPath = Path()
         fillPath.addPath(path)
         fillPath.lineTo(width, height)
@@ -274,12 +276,10 @@ fun TrendLineChart(
                 endY = height
             )
         )
-
-        // Draw line
         drawPath(
             path = path,
-            color = lineColor.copy(alpha = 0.8f),
-            style = Stroke(width = 4.dp.toPx(), cap = StrokeCap.Round)
+            color = VibrantOrange, // Solid Orange Line
+            style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round)
         )
     }
 }
@@ -296,9 +296,14 @@ fun StatCard(
         modifier = modifier,
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = CardSurface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp) // soft shadow
     ) {
-        Column(modifier = Modifier.padding(20.dp)) {
+        Column(
+            modifier = Modifier
+                .padding(16.dp)
+                .height(80.dp), // Fixed height ~28 in HTML logic (h-28 = 7rem = 112px?), adjusted visually
+            verticalArrangement = Arrangement.SpaceBetween
+        ) {
             Box(
                 modifier = Modifier
                     .size(32.dp)
@@ -313,20 +318,20 @@ fun StatCard(
                     modifier = Modifier.size(18.dp)
                 )
             }
-            Spacer(modifier = Modifier.height(16.dp))
-            Text(
-                text = title,
-                style = MaterialTheme.typography.bodySmall,
-                color = TextSecondary,
-                fontWeight = FontWeight.Medium
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = amount,
-                style = MaterialTheme.typography.titleLarge,
-                color = TextPrimary,
-                fontWeight = FontWeight.Bold
-            )
+            Column {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = TextSecondary,
+                    fontWeight = FontWeight.Medium
+                )
+                Text(
+                    text = amount,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = amountColor,
+                    fontWeight = FontWeight.Bold
+                )
+            }
         }
     }
 }
@@ -340,11 +345,11 @@ fun TopDebtorItem(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp)
+            .padding(horizontal = 24.dp) // align with padding
             .clickable(onClick = onClick),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = CardSurface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp) // shadow-soft
     ) {
         Row(
             modifier = Modifier
@@ -352,12 +357,12 @@ fun TopDebtorItem(
                 .fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Avatar (Initial)
             Box(
                 modifier = Modifier
                     .size(48.dp)
-                    .clip(CircleShape)
-                    .background(BackgroundColor),
+                    .clip(RoundedCornerShape(12.dp)) // Rounded Square
+                    .background(BackgroundColor)
+                    .border(1.dp, Color(0xFFEEEEEE), RoundedCornerShape(12.dp)),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
@@ -370,23 +375,21 @@ fun TopDebtorItem(
 
             Spacer(modifier = Modifier.width(16.dp))
 
-            // Name & ID
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = debtor.name,
-                    style = MaterialTheme.typography.titleMedium,
+                    style = MaterialTheme.typography.bodyLarge,
                     fontWeight = FontWeight.Bold,
-                    color = TextPrimary
+                    color = MidnightBlue
                 )
-                Spacer(modifier = Modifier.height(2.dp))
                 Text(
                     text = "ID: ...${debtor.id.toString().takeLast(4).padStart(4, '0')}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = TextSecondary
+                    style = MaterialTheme.typography.labelSmall,
+                    color = TextSecondary,
+                    fontWeight = FontWeight.Medium
                 )
             }
 
-            // Amount
             Text(
                 text = currencyFormatter.format(debtor.amount),
                 style = MaterialTheme.typography.titleMedium,

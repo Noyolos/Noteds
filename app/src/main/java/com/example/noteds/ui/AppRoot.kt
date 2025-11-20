@@ -7,6 +7,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.People
+import androidx.compose.material.icons.filled.PieChart
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -30,9 +31,9 @@ fun AppRoot(
 ) {
     val destinations = remember {
         listOf(
-            BottomDestination("Dashboard", Icons.Default.Home),
-            BottomDestination("Customers", Icons.Default.People),
-            BottomDestination("Reports", Icons.Default.BarChart)
+            BottomDestination("首頁", Icons.Default.Home),
+            BottomDestination("客戶", Icons.Default.People),
+            BottomDestination("報表", Icons.Default.PieChart)
         )
     }
     val selectedIndex = rememberSaveable { mutableIntStateOf(0) }
