@@ -11,7 +11,9 @@ class AppContainer(context: Context) {
         context.applicationContext,
         AppDatabase::class.java,
         "noteds-db"
-    ).build()
+    )
+    .fallbackToDestructiveMigration()
+    .build()
 
     val customerRepository: CustomerRepository by lazy {
         CustomerRepository(

@@ -2,6 +2,7 @@ package com.example.noteds.ui.customers
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -9,12 +10,15 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.*
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -30,18 +34,19 @@ import java.util.Locale
 fun CustomerDetailScreen(
     customerId: Long,
     customerViewModel: CustomerViewModel,
-    onClose: () -> Unit
+    onClose: () -> Unit,
+    onEditClick: (Long) -> Unit
 ) {
     val customers by customerViewModel.customersWithBalance.collectAsState()
     val selected = customers.firstOrNull { it.customer.id == customerId }
     val currencyFormatter = remember { NumberFormat.getCurrencyInstance(Locale.getDefault()) }
-    val dateFormatter = remember { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()) }
+    val dateFormatter = remember { SimpleDateFormat("dd MMM yyyy", Locale.getDefault()) }
 
-    // Fetch transactions
     val transactions by customerViewModel.getTransactionsForCustomer(customerId)
         .collectAsState(initial = emptyList())
 
     var showTransactionForm by remember { mutableStateOf<String?>(null) }
+    var showDeleteConfirm by remember { mutableStateOf(false) }
 
     if (selected == null) {
         onClose()
@@ -62,176 +67,283 @@ fun CustomerDetailScreen(
         Scaffold(
             topBar = {
                 TopAppBar(
-                    title = { Text("客人详情", color = Color.White) },
+                    title = { Text("Details", color = TextWhite, fontWeight = FontWeight.Bold) },
                     navigationIcon = {
                         IconButton(onClick = onClose) {
-                            Icon(Icons.Default.ArrowBack, contentDescription = null, tint = Color.White)
+                            Icon(Icons.Default.ArrowBack, contentDescription = null, tint = TextWhite)
                         }
                     },
-                    colors = TopAppBarDefaults.topAppBarColors(containerColor = TealPrimary)
+                    actions = {
+                        IconButton(onClick = { onEditClick(customerId) }) {
+                            Icon(Icons.Default.Edit, contentDescription = "Edit", tint = TextWhite)
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = MidnightBlue)
                 )
             },
             bottomBar = {
-                Surface(
-                    shadowElevation = 8.dp,
-                    modifier = Modifier.navigationBarsPadding()
+                Column(
+                    modifier = Modifier
+                        .background(CardSurface)
+                        .navigationBarsPadding()
                 ) {
                     Row(
                         modifier = Modifier
                             .padding(16.dp)
                             .fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        horizontalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
                         Button(
                             onClick = { showTransactionForm = "DEBT" },
                             modifier = Modifier
                                 .weight(1f)
-                                .height(50.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = TealPrimary),
-                            shape = RoundedCornerShape(8.dp)
+                                .height(56.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = MidnightBlue),
+                            shape = RoundedCornerShape(16.dp)
                         ) {
-                            Text("记赊账")
+                            Text("Add Debt", fontWeight = FontWeight.Bold)
                         }
-                        OutlinedButton(
+                        Button(
                             onClick = { showTransactionForm = "PAYMENT" },
                             modifier = Modifier
                                 .weight(1f)
-                                .height(50.dp),
-                            border = BorderStroke(1.dp, TealPrimary),
-                            shape = RoundedCornerShape(8.dp)
+                                .height(56.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = FunctionalGreen),
+                            shape = RoundedCornerShape(16.dp)
                         ) {
-                            Text("登记还钱", color = TealPrimary)
+                            Text("Repay", fontWeight = FontWeight.Bold)
                         }
                     }
                 }
             },
-            containerColor = BackgroundGray
+            containerColor = BackgroundColor
         ) { padding ->
             LazyColumn(
                 modifier = Modifier
                     .padding(padding)
-                    .fillMaxSize()
+                    .fillMaxSize(),
+                contentPadding = PaddingValues(bottom = 24.dp)
             ) {
+                // Header Profile
                 item {
-                    Row(
+                    Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .background(Color.White)
-                            .padding(20.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                            .background(MidnightBlue)
+                            .padding(bottom = 32.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Box(
                             modifier = Modifier
-                                .size(60.dp)
+                                .size(100.dp)
                                 .clip(CircleShape)
-                                .background(TealLight),
+                                .background(Color.White),
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                selected.customer.name.take(1),
-                                fontSize = 24.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = TealDark
+                                text = selected.customer.name.take(1).uppercase(),
+                                fontSize = 40.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = MidnightBlue
                             )
                         }
-                        Spacer(modifier = Modifier.width(16.dp))
-                        Column {
-                            Text(selected.customer.name, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                            Text(selected.customer.phone, color = TextGray)
-                            Text("B98765432", color = TextGray)
-                        }
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            text = selected.customer.name,
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = TextWhite
+                        )
+                        Text(
+                            text = selected.customer.phone,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = TextWhite.copy(alpha = 0.7f)
+                        )
                     }
                 }
 
+                // Debt Card (Overlapping)
                 item {
-                    Card(
-                        colors = CardDefaults.cardColors(containerColor = DebtRedBg),
-                        shape = RoundedCornerShape(12.dp),
-                        border = BorderStroke(1.dp, DebtRed.copy(alpha = 0.1f)),
+                    Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(16.dp)
+                            .offset(y = (-20).dp)
+                            .padding(horizontal = 16.dp)
                     ) {
-                        Column(modifier = Modifier.padding(20.dp)) {
-                            Text("当前欠款", color = TextGray)
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                currencyFormatter.format(selected.balance),
-                                color = DebtRed,
-                                fontSize = 32.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            val lastTransaction = transactions.maxByOrNull { it.timestamp }
-                            val lastDate = if (lastTransaction != null) dateFormatter.format(Date(lastTransaction.timestamp)) else "无记录"
-                            Text("最后还钱: $lastDate", color = TextGray, fontSize = 14.sp)
-                        }
-                    }
-                }
-
-                item {
-                    TabRow(
-                        selectedTabIndex = 0,
-                        containerColor = Color.White,
-                        contentColor = TealPrimary,
-                        indicator = { tabPositions ->
-                            TabRowDefaults.SecondaryIndicator(
-                                Modifier.tabIndicatorOffset(tabPositions[0]),
-                                color = TealPrimary
-                            )
-                        }
-                    ) {
-                        Tab(selected = true, onClick = {}, text = { Text("流水记录") })
-                        Tab(selected = false, onClick = {}, text = { Text("图表") })
-                    }
-                }
-
-                items(transactions.sortedByDescending { it.timestamp }) { transaction ->
-                    Card(
-                        colors = CardDefaults.cardColors(containerColor = Color.White),
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 8.dp),
-                        elevation = CardDefaults.cardElevation(1.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .padding(16.dp)
-                                .fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(24.dp),
+                            elevation = CardDefaults.cardElevation(8.dp)
                         ) {
-                            Column {
-                                Text(dateFormatter.format(Date(transaction.timestamp)), color = TextGray, fontSize = 14.sp)
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    val isDebt = transaction.type == "DEBT"
-                                    Surface(
-                                        color = if (isDebt) DebtRed else PaymentGreen,
-                                        shape = RoundedCornerShape(4.dp),
-                                        modifier = Modifier.padding(end = 8.dp)
-                                    ) {
-                                        Text(
-                                            if (isDebt) "赊账" else "还款",
-                                            color = Color.White,
-                                            fontSize = 10.sp,
-                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            Box(
+                                modifier = Modifier
+                                    .background(
+                                        Brush.horizontalGradient(
+                                            colors = listOf(MidnightBlue, Color(0xFF303F9F))
                                         )
-                                    }
-                                    Text(transaction.note ?: (if(isDebt) "商品" else "还款"), color = TextBlack)
+                                    )
+                                    .padding(24.dp)
+                                    .fillMaxWidth()
+                            ) {
+                                Column {
+                                    Text("Current Balance", color = TextWhite.copy(alpha = 0.8f))
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Text(
+                                        text = currencyFormatter.format(selected.balance),
+                                        fontSize = 36.sp,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = TextWhite
+                                    )
                                 }
                             }
-                            Text(
-                                "${if (transaction.type == "DEBT") "+" else "-"} ${currencyFormatter.format(transaction.amount)}",
-                                color = if (transaction.type == "DEBT") DebtRed else PaymentGreen,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 18.sp
-                            )
                         }
+                    }
+                }
+
+                // Passport Photo (If available)
+                if (selected.customer.passportPhotoUri != null) {
+                    item {
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 8.dp),
+                            shape = RoundedCornerShape(16.dp),
+                            colors = CardDefaults.cardColors(containerColor = CardSurface)
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Text("Passport / ID", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(200.dp)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(Color.LightGray)
+                                        .clickable { /* View Full Screen */ },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text("Photo Preview", color = TextSecondary)
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Transactions Header
+                item {
+                    Text(
+                        text = "Transaction History",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = TextPrimary,
+                        modifier = Modifier.padding(start = 24.dp, top = 16.dp, bottom = 8.dp)
+                    )
+                }
+
+                // Transaction List
+                items(transactions.sortedByDescending { it.timestamp }) { transaction ->
+                    TransactionItem(transaction, dateFormatter, currencyFormatter)
+                }
+
+                // Delete Button
+                item {
+                    Spacer(modifier = Modifier.height(32.dp))
+                    TextButton(
+                        onClick = { showDeleteConfirm = true },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.textButtonColors(contentColor = FunctionalRed)
+                    ) {
+                        Icon(Icons.Default.Delete, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Delete Customer")
                     }
                 }
             }
+        }
+
+        if (showDeleteConfirm) {
+            AlertDialog(
+                onDismissRequest = { showDeleteConfirm = false },
+                title = { Text("Delete Customer?") },
+                text = { Text("This action cannot be undone. All transaction history will be lost.") },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            customerViewModel.deleteCustomer(customerId)
+                            onClose()
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = FunctionalRed)
+                    ) {
+                        Text("Delete")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showDeleteConfirm = false }) {
+                        Text("Cancel")
+                    }
+                }
+            )
+        }
+    }
+}
+
+@Composable
+fun TransactionItem(
+    transaction: com.example.noteds.data.entity.LedgerEntryEntity,
+    dateFormatter: SimpleDateFormat,
+    currencyFormatter: NumberFormat
+) {
+    val isDebt = transaction.type == "DEBT"
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 6.dp),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = CardSurface),
+        elevation = CardDefaults.cardElevation(1.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .padding(16.dp)
+                .fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(if (isDebt) DebtColor.copy(alpha = 0.1f) else PaymentColor.copy(alpha = 0.1f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = if (isDebt) "D" else "P",
+                    fontWeight = FontWeight.Bold,
+                    color = if (isDebt) DebtColor else PaymentColor
+                )
+            }
+
+            Spacer(modifier = Modifier.width(16.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = transaction.note ?: (if (isDebt) "Debt" else "Payment"),
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium,
+                    color = TextPrimary
+                )
+                Text(
+                    text = dateFormatter.format(Date(transaction.timestamp)),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TextSecondary
+                )
+            }
+
+            Text(
+                text = "${if (isDebt) "+" else "-"} ${currencyFormatter.format(transaction.amount)}",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = if (isDebt) DebtColor else PaymentColor
+            )
         }
     }
 }

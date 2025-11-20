@@ -20,7 +20,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.noteds.data.model.CustomerWithBalance
-import com.example.noteds.ui.components.AddCustomerDialog
 import com.example.noteds.ui.theme.*
 import java.text.NumberFormat
 import java.util.Locale
@@ -30,16 +29,14 @@ import java.util.Locale
 fun CustomerListScreen(
     customerViewModel: CustomerViewModel,
     modifier: Modifier = Modifier,
-    onCustomerClick: (CustomerWithBalance) -> Unit = {}
+    onCustomerClick: (CustomerWithBalance) -> Unit = {},
+    onAddCustomerClick: () -> Unit
 ) {
     val customers by customerViewModel.customersWithBalance.collectAsState()
-    var showAddDialog by remember { mutableStateOf(false) }
     val currencyFormatter = remember { NumberFormat.getCurrencyInstance(Locale.getDefault()) }
 
-    // 搜尋文字狀態
     var searchQuery by remember { mutableStateOf("") }
 
-    // 過濾邏輯
     val filteredCustomers = remember(customers, searchQuery) {
         if (searchQuery.isBlank()) {
             customers
@@ -54,40 +51,40 @@ fun CustomerListScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("客人列表", color = Color.White) },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = TealPrimary)
+                title = { Text("Customers", color = TextWhite, fontWeight = FontWeight.Bold) },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MidnightBlue)
             )
         },
         floatingActionButton = {
             FloatingActionButton(
-                onClick = { showAddDialog = true },
-                containerColor = TealPrimary,
-                contentColor = Color.White
+                onClick = onAddCustomerClick,
+                containerColor = VibrantOrange,
+                contentColor = TextWhite
             ) {
                 Icon(Icons.Default.Add, contentDescription = "Add")
             }
         },
-        containerColor = BackgroundGray
+        containerColor = BackgroundColor
     ) { padding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            // 搜尋欄
+            // Search Bar
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(16.dp),
-                shape = RoundedCornerShape(8.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
-                elevation = CardDefaults.cardElevation(2.dp)
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = CardSurface),
+                elevation = CardDefaults.cardElevation(4.dp)
             ) {
                 OutlinedTextField(
                     value = searchQuery,
                     onValueChange = { searchQuery = it },
-                    placeholder = { Text("搜索姓名 / 电话", color = TextGray) },
-                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = TextGray) },
+                    placeholder = { Text("Search name or phone", color = TextSecondary) },
+                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = TextSecondary) },
                     modifier = Modifier.fillMaxWidth(),
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = Color.Transparent,
@@ -113,15 +110,6 @@ fun CustomerListScreen(
                 }
             }
         }
-
-        if (showAddDialog) {
-            AddCustomerDialog(
-                onDismiss = { showAddDialog = false },
-                onConfirm = { name, phone, note ->
-                    customerViewModel.addCustomer(name, phone, note, null, null)
-                }
-            )
-        }
     }
 }
 
@@ -135,62 +123,63 @@ fun CustomerCard(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
-        elevation = CardDefaults.cardElevation(1.dp)
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = CardSurface),
+        elevation = CardDefaults.cardElevation(2.dp)
     ) {
         Row(
             modifier = Modifier
-                .padding(16.dp)
+                .padding(20.dp)
                 .fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(
                 modifier = Modifier
-                    .size(50.dp)
+                    .size(56.dp)
                     .clip(CircleShape)
-                    .background(TealLight),
+                    .background(BackgroundColor),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = item.customer.name.take(1),
-                    style = MaterialTheme.typography.titleMedium,
+                    text = item.customer.name.take(1).uppercase(),
+                    style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
-                    color = TealDark
+                    color = MidnightBlue
                 )
             }
 
-            Spacer(modifier = Modifier.width(16.dp))
+            Spacer(modifier = Modifier.width(20.dp))
 
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = item.customer.name,
                     style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Bold,
+                    color = TextPrimary
                 )
                 Spacer(modifier = Modifier.height(4.dp))
-                Row {
-                    Text("现欠: ", style = MaterialTheme.typography.bodyMedium, color = TextGray)
-                    Text(
-                        formatter.format(item.balance),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = if (item.balance > 0) DebtRed else PaymentGreen,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-                Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "最后还钱: 2025-11-01",
+                    text = "ID: ...${item.customer.id.toString().takeLast(4).padStart(4, '0')}",
                     style = MaterialTheme.typography.bodySmall,
-                    color = TextGray
+                    color = TextSecondary
                 )
             }
 
-            Icon(
-                Icons.Default.ChevronRight,
-                contentDescription = null,
-                tint = TextGray
-            )
+            Column(horizontalAlignment = Alignment.End) {
+                Text(
+                    text = formatter.format(item.balance),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = if (item.balance > 0) DebtColor else PaymentColor,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Icon(
+                    Icons.Default.ChevronRight,
+                    contentDescription = null,
+                    tint = TextSecondary,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
         }
     }
 }

@@ -35,7 +35,11 @@ class CustomerViewModel(
         phone: String,
         note: String,
         profilePhotoUri: String?,
-        idCardPhotoUri: String?
+        passportPhotoUri: String?,
+        initialDebtAmount: Double?,
+        initialDebtNote: String?,
+        initialDebtDate: Long?,
+        repaymentDate: Long?
     ) {
         viewModelScope.launch {
             val customer = CustomerEntity(
@@ -43,9 +47,22 @@ class CustomerViewModel(
                 phone = phone,
                 note = note,
                 profilePhotoUri = profilePhotoUri,
-                idCardPhotoUri = idCardPhotoUri
+                passportPhotoUri = passportPhotoUri,
+                expectedRepaymentDate = repaymentDate,
+                initialTransactionDone = initialDebtAmount != null && initialDebtAmount > 0
             )
-            customerRepository.insertCustomer(customer)
+            val customerId = customerRepository.insertCustomer(customer)
+
+            if (initialDebtAmount != null && initialDebtAmount > 0) {
+                val entry = LedgerEntryEntity(
+                    customerId = customerId,
+                    type = "DEBT",
+                    amount = initialDebtAmount,
+                    timestamp = initialDebtDate ?: System.currentTimeMillis(),
+                    note = initialDebtNote ?: "Initial Balance"
+                )
+                ledgerRepository.insertEntry(entry)
+            }
         }
     }
 
@@ -68,9 +85,9 @@ class CustomerViewModel(
         }
     }
 
-    fun updateIdCardPhoto(customerId: Long, photoUri: String?) {
+    fun updatePassportPhoto(customerId: Long, photoUri: String?) {
         updateCustomerPhotoInternal(customerId) { current ->
-            current.copy(idCardPhotoUri = photoUri)
+            current.copy(passportPhotoUri = photoUri)
         }
     }
 
