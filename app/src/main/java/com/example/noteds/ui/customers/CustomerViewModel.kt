@@ -34,8 +34,8 @@ class CustomerViewModel(
         name: String,
         phone: String,
         note: String,
-        profilePhotoUri: String?,
-        passportPhotoUri: String?,
+        profilePhotoUris: List<String?>,
+        passportPhotoUris: List<String?>,
         initialDebtAmount: Double?,
         initialDebtNote: String?,
         initialDebtDate: Long?,
@@ -46,8 +46,12 @@ class CustomerViewModel(
                 name = name,
                 phone = phone,
                 note = note,
-                profilePhotoUri = profilePhotoUri,
-                passportPhotoUri = passportPhotoUri,
+                profilePhotoUri = profilePhotoUris.getOrNull(0),
+                profilePhotoUri2 = profilePhotoUris.getOrNull(1),
+                profilePhotoUri3 = profilePhotoUris.getOrNull(2),
+                passportPhotoUri = passportPhotoUris.getOrNull(0),
+                passportPhotoUri2 = passportPhotoUris.getOrNull(1),
+                passportPhotoUri3 = passportPhotoUris.getOrNull(2),
                 expectedRepaymentDate = repaymentDate,
                 initialTransactionDone = initialDebtAmount != null && initialDebtAmount > 0
             )
@@ -66,9 +70,30 @@ class CustomerViewModel(
         }
     }
 
-    fun updateCustomer(customer: CustomerEntity) {
+    fun updateCustomer(
+        customerId: Long,
+        name: String,
+        phone: String,
+        note: String,
+        profilePhotoUris: List<String?>,
+        passportPhotoUris: List<String?>,
+        repaymentDate: Long? = null
+    ) {
         viewModelScope.launch {
-            customerRepository.updateCustomer(customer)
+            val existing = customerRepository.getCustomerById(customerId) ?: return@launch
+            val updated = existing.copy(
+                name = name,
+                phone = phone,
+                note = note,
+                profilePhotoUri = profilePhotoUris.getOrNull(0),
+                profilePhotoUri2 = profilePhotoUris.getOrNull(1),
+                profilePhotoUri3 = profilePhotoUris.getOrNull(2),
+                passportPhotoUri = passportPhotoUris.getOrNull(0),
+                passportPhotoUri2 = passportPhotoUris.getOrNull(1),
+                passportPhotoUri3 = passportPhotoUris.getOrNull(2),
+                expectedRepaymentDate = repaymentDate
+            )
+            customerRepository.updateCustomer(updated)
         }
     }
 

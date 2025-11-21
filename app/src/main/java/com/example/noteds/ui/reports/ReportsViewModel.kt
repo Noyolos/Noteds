@@ -13,7 +13,6 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import java.util.Calendar
-import java.util.Date
 
 data class DebtorData(
     val id: Long,
@@ -124,6 +123,27 @@ class ReportsViewModel(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),
             initialValue = 0
+        )
+
+    val averageCollectionPeriod: StateFlow<Double> = ledgerRepository.getAllEntries()
+        .map { entries ->
+            val now = System.currentTimeMillis()
+            val thirtyDaysAgo = now - 30L * 24 * 60 * 60 * 1000
+
+            val totalDebt = entries.filter { it.type.uppercase() == "DEBT" }.sumOf { it.amount }
+            val totalPayment = entries.filter { it.type.uppercase() == "PAYMENT" }.sumOf { it.amount }
+            val outstanding = (totalDebt - totalPayment).coerceAtLeast(0.0)
+
+            val recentDebt = entries
+                .filter { it.type.uppercase() == "DEBT" && it.timestamp >= thirtyDaysAgo }
+                .sumOf { it.amount }
+
+            if (recentDebt == 0.0) 0.0 else (outstanding / recentDebt) * 30.0
+        }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000),
+            initialValue = 0.0
         )
 
     // Real Trend Data (Last 6 Months Total Outstanding Debt)
