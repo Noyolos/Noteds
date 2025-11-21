@@ -1,15 +1,12 @@
 package com.example.noteds.data.repository
 
 import com.example.noteds.data.dao.CustomerDao
-import com.example.noteds.data.dao.LedgerDao
 import com.example.noteds.data.entity.CustomerEntity
 import com.example.noteds.data.model.CustomerWithBalance
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.combine
 
 class CustomerRepository(
-    private val customerDao: CustomerDao,
-    private val ledgerDao: LedgerDao
+    private val customerDao: CustomerDao
 ) {
     fun getAllCustomers(): Flow<List<CustomerEntity>> = customerDao.getAllCustomers()
 
@@ -24,25 +21,5 @@ class CustomerRepository(
     suspend fun getCustomerById(customerId: Long): CustomerEntity? = customerDao.getCustomerById(customerId)
 
     fun getCustomersWithBalance(): Flow<List<CustomerWithBalance>> =
-        combine(
-            customerDao.getAllCustomers(),
-            ledgerDao.getAllEntries()
-        ) { customers, entries ->
-            val balanceByCustomer = entries.groupBy { it.customerId }
-                .mapValues { (_, customerEntries) ->
-                    customerEntries.fold(0.0) { acc, entry ->
-                        val delta = when (entry.type.uppercase()) {
-                            "DEBT" -> entry.amount
-                            "PAYMENT" -> -entry.amount
-                            else -> 0.0
-                        }
-                        acc + delta
-                    }
-                }
-
-            customers.map { customer ->
-                val balance = balanceByCustomer[customer.id] ?: 0.0
-                CustomerWithBalance(customer, balance)
-            }
-        }
+        customerDao.getCustomersWithBalance()
 }

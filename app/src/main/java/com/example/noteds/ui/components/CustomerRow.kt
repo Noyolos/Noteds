@@ -52,6 +52,13 @@ fun CustomerRow(
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold
                     )
+                    if (item.customer.code.isNotBlank()) {
+                        Text(
+                            text = "編號: ${'$'}{item.customer.code}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                     Text(
                         text = item.customer.phone,
                         style = MaterialTheme.typography.bodyMedium,

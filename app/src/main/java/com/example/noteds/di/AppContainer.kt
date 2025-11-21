@@ -7,8 +7,9 @@ import com.example.noteds.data.repository.CustomerRepository
 import com.example.noteds.data.repository.LedgerRepository
 
 class AppContainer(context: Context) {
+    val appContext: Context = context.applicationContext
     private val database: AppDatabase = Room.databaseBuilder(
-        context.applicationContext,
+        appContext,
         AppDatabase::class.java,
         "noteds-db"
     )
@@ -17,8 +18,7 @@ class AppContainer(context: Context) {
 
     val customerRepository: CustomerRepository by lazy {
         CustomerRepository(
-            customerDao = database.customerDao(),
-            ledgerDao = database.ledgerDao()
+            customerDao = database.customerDao()
         )
     }
 

@@ -1,5 +1,6 @@
 package com.example.noteds.ui.customers
 
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -12,7 +13,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.*
@@ -24,11 +24,12 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
 import coil.compose.AsyncImage
+import com.example.noteds.ui.components.FullScreenImageDialog
 import com.example.noteds.ui.theme.*
 import java.text.NumberFormat
 import java.text.SimpleDateFormat
@@ -55,6 +56,7 @@ fun CustomerDetailScreen(
     var showTransactionForm by remember { mutableStateOf<String?>(null) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var fullScreenPhoto by remember { mutableStateOf<String?>(null) }
+    val context = LocalContext.current
 
     if (selected == null) {
         onClose()
@@ -213,6 +215,14 @@ fun CustomerDetailScreen(
                             fontWeight = FontWeight.Bold,
                             color = TextPrimary
                         )
+                        if (selected.customer.code.isNotBlank()) {
+                            Text(
+                                text = "編號: ${'$'}{selected.customer.code}",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = TextSecondary,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
                         Text(
                             text = selected.customer.phone,
                             style = MaterialTheme.typography.bodyMedium,
@@ -354,36 +364,19 @@ fun CustomerDetailScreen(
         }
 
         fullScreenPhoto?.let { uri ->
-            FullScreenImageDialog(photoUri = uri) {
-                fullScreenPhoto = null
-            }
-        }
-    }
-}
-
-@Composable
-fun FullScreenImageDialog(photoUri: String, onDismiss: () -> Unit) {
-    Dialog(onDismissRequest = onDismiss) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.9f)),
-            contentAlignment = Alignment.Center
-        ) {
-            AsyncImage(
-                model = photoUri,
-                contentDescription = null,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .fillMaxHeight(),
-                contentScale = ContentScale.Fit
+            FullScreenImageDialog(
+                photoUri = uri,
+                onDismiss = { fullScreenPhoto = null },
+                onDownload = {
+                    customerViewModel.saveImageToGallery(uri) { success ->
+                        Toast.makeText(
+                            context,
+                            if (success) "圖片已下載到相冊" else "下載失敗，請稍後再試",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                }
             )
-            IconButton(
-                onClick = onDismiss,
-                modifier = Modifier.align(Alignment.TopEnd).padding(16.dp)
-            ) {
-                Icon(Icons.Default.Close, contentDescription = null, tint = Color.White)
-            }
         }
     }
 }

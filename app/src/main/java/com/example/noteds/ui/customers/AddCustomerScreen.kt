@@ -29,6 +29,7 @@ fun AddCustomerScreen(
     onBack: () -> Unit,
     onSaved: () -> Unit
 ) {
+    var code by remember { mutableStateOf("") }
     var name by remember { mutableStateOf("") }
     var phone by remember { mutableStateOf("") }
     var initialAmount by remember { mutableStateOf("") }
@@ -53,6 +54,7 @@ fun AddCustomerScreen(
                 onClick = {
                     if (name.isNotBlank()) {
                         customerViewModel.addCustomer(
+                            code = code,
                             name = name,
                             phone = phone,
                             note = note,
@@ -96,6 +98,22 @@ fun AddCustomerScreen(
             // Basic Info
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 Text("基本資料", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = TextSecondary)
+
+                OutlinedTextField(
+                    value = code,
+                    onValueChange = { code = it },
+                    placeholder = { Text("客戶編號") },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedContainerColor = CardSurface,
+                        unfocusedContainerColor = CardSurface,
+                        focusedBorderColor = MidnightBlue,
+                        unfocusedBorderColor = Color.Transparent
+                    ),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                    textStyle = MaterialTheme.typography.bodyLarge.copy(color = MidnightBlue)
+                )
 
                 OutlinedTextField(
                     value = name,

@@ -18,8 +18,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
 import com.example.noteds.data.model.CustomerWithBalance
 import com.example.noteds.ui.theme.*
 import java.text.NumberFormat
@@ -164,19 +166,30 @@ fun CustomerCard(
                 .fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(
-                modifier = Modifier
-                    .size(48.dp)
-                    .clip(CircleShape)
-                    .background(MidnightBlue.copy(alpha = 0.05f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = item.customer.name.take(1).uppercase(),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MidnightBlue
+            if (!item.customer.profilePhotoUri.isNullOrBlank()) {
+                AsyncImage(
+                    model = item.customer.profilePhotoUri,
+                    contentDescription = "客戶頭像",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(CircleShape)
                 )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(CircleShape)
+                        .background(MidnightBlue.copy(alpha = 0.05f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = item.customer.name.take(1).uppercase(),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MidnightBlue
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.width(16.dp))
