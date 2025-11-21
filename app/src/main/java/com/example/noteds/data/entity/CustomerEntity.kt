@@ -19,5 +19,6 @@ data class CustomerEntity(
     val passportPhotoUri2: String? = null,
     val passportPhotoUri3: String? = null,
     val expectedRepaymentDate: Long? = null,
-    val initialTransactionDone: Boolean = false
+    val initialTransactionDone: Boolean = false,
+    val isDeleted: Boolean = false
 )

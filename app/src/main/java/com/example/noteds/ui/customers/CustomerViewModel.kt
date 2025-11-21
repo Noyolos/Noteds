@@ -99,6 +99,22 @@ class CustomerViewModel(
             val existing = customerRepository.getCustomerById(customerId) ?: return@launch
             val savedProfilePhotos = persistPhotos(profilePhotoUris, "profile")
             val savedPassportPhotos = persistPhotos(passportPhotoUris, "passport")
+            cleanupReplacedFiles(
+                old = listOf(
+                    existing.profilePhotoUri,
+                    existing.profilePhotoUri2,
+                    existing.profilePhotoUri3
+                ),
+                new = savedProfilePhotos
+            )
+            cleanupReplacedFiles(
+                old = listOf(
+                    existing.passportPhotoUri,
+                    existing.passportPhotoUri2,
+                    existing.passportPhotoUri3
+                ),
+                new = savedPassportPhotos
+            )
             val updated = existing.copy(
                 code = code,
                 name = name,
@@ -118,14 +134,25 @@ class CustomerViewModel(
 
     fun deleteCustomer(customerId: Long) {
         viewModelScope.launch {
-            customerRepository.deleteCustomerById(customerId)
-            ledgerRepository.deleteEntriesForCustomer(customerId)
+            customerRepository.softDeleteCustomerById(customerId)
         }
     }
 
     fun updateProfilePhoto(customerId: Long, photoUri: String?) {
         updateCustomerPhotoInternal(customerId) { current ->
             current.copy(profilePhotoUri = photoUri)
+        }
+    }
+
+    fun updateLedgerEntry(entry: LedgerEntryEntity) {
+        viewModelScope.launch {
+            ledgerRepository.updateEntry(entry.copy(type = entry.type.uppercase(Locale.US)))
+        }
+    }
+
+    fun deleteLedgerEntry(entryId: Long) {
+        viewModelScope.launch {
+            ledgerRepository.deleteEntryById(entryId)
         }
     }
 
@@ -179,6 +206,22 @@ class CustomerViewModel(
                 persistPhoto(uri, "${'$'}prefix_${'$'}index")
             }
         }
+
+    private suspend fun cleanupReplacedFiles(old: List<String?>, new: List<String?>) {
+        withContext(Dispatchers.IO) {
+            old.forEachIndexed { index, oldUri ->
+                val newUri = new.getOrNull(index)
+                if (!oldUri.isNullOrBlank() && oldUri != newUri &&
+                    oldUri.startsWith(appContext.filesDir.absolutePath)
+                ) {
+                    val file = File(oldUri)
+                    if (file.exists()) {
+                        file.delete()
+                    }
+                }
+            }
+        }
+    }
 
     private fun persistPhoto(uriString: String?, prefix: String): String? {
         if (uriString.isNullOrBlank()) return null

@@ -4,6 +4,7 @@ import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -13,6 +14,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.*
@@ -25,10 +27,13 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.example.noteds.data.entity.LedgerEntryEntity
 import com.example.noteds.ui.components.FullScreenImageDialog
 import com.example.noteds.ui.theme.*
 import java.text.NumberFormat
@@ -55,6 +60,8 @@ fun CustomerDetailScreen(
 
     var showTransactionForm by remember { mutableStateOf<String?>(null) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
+    var entryForEdit by remember { mutableStateOf<com.example.noteds.data.entity.LedgerEntryEntity?>(null) }
+    var entryPendingDelete by remember { mutableStateOf<com.example.noteds.data.entity.LedgerEntryEntity?>(null) }
     var fullScreenPhoto by remember { mutableStateOf<String?>(null) }
     val context = LocalContext.current
 
@@ -320,7 +327,12 @@ fun CustomerDetailScreen(
 
                 // Transaction List
                 items(transactions.sortedByDescending { it.timestamp }) { transaction ->
-                    TransactionItem(transaction, dateFormatter, currencyFormatter)
+                    TransactionItem(
+                        transaction = transaction,
+                        dateFormatter = dateFormatter,
+                        currencyFormatter = currencyFormatter,
+                        onLongPress = { entryForEdit = transaction }
+                    )
                 }
 
                 // Delete Button
@@ -339,11 +351,50 @@ fun CustomerDetailScreen(
             }
         }
 
+        entryForEdit?.let { entry ->
+            EditTransactionDialog(
+                entry = entry,
+                onDismiss = { entryForEdit = null },
+                onSave = { updated ->
+                    customerViewModel.updateLedgerEntry(updated)
+                    entryForEdit = null
+                },
+                onDelete = {
+                    entryForEdit = null
+                    entryPendingDelete = entry
+                }
+            )
+        }
+
+        entryPendingDelete?.let { entry ->
+            AlertDialog(
+                onDismissRequest = { entryPendingDelete = null },
+                title = { Text("刪除此筆紀錄？") },
+                text = { Text("此操作將移除該筆交易，但不影響其他資料。") },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            customerViewModel.deleteLedgerEntry(entry.id)
+                            entryPendingDelete = null
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = FunctionalRed)
+                    ) {
+                        Text("刪除")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { entryPendingDelete = null }) {
+                        Text("取消")
+                    }
+                }
+            )
+        }
+
         if (showDeleteConfirm) {
             AlertDialog(
                 onDismissRequest = { showDeleteConfirm = false },
                 title = { Text("確定要刪除嗎？") },
-                text = { Text("此操作將永久刪除該客戶及其所有交易記錄，且無法復原。") },
+                text = { Text("此操作將停用該客戶，但交易紀錄仍會被保留以避免財務資料遺失。") },
                 confirmButton = {
                     Button(
                         onClick = {
@@ -383,15 +434,20 @@ fun CustomerDetailScreen(
 
 @Composable
 fun TransactionItem(
-    transaction: com.example.noteds.data.entity.LedgerEntryEntity,
+    transaction: LedgerEntryEntity,
     dateFormatter: SimpleDateFormat,
-    currencyFormatter: NumberFormat
+    currencyFormatter: NumberFormat,
+    onLongPress: () -> Unit = {}
 ) {
     val isDebt = transaction.type == "DEBT"
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 24.dp, vertical = 6.dp),
+            .padding(horizontal = 24.dp, vertical = 6.dp)
+            .combinedClickable(
+                onClick = {},
+                onLongClick = onLongPress
+            ),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = CardSurface),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp) // shadow-soft
@@ -439,6 +495,96 @@ fun TransactionItem(
                 fontWeight = FontWeight.Bold,
                 color = if (isDebt) DebtColor else PaymentColor
             )
+        }
+    }
+}
+
+@Composable
+fun EditTransactionDialog(
+    entry: LedgerEntryEntity,
+    onDismiss: () -> Unit,
+    onSave: (LedgerEntryEntity) -> Unit,
+    onDelete: () -> Unit
+) {
+    var amountText by remember { mutableStateOf(entry.amount.toString()) }
+    var noteText by remember { mutableStateOf(entry.note.orEmpty()) }
+    var showDatePicker by remember { mutableStateOf(false) }
+    val datePickerState = rememberDatePickerState(initialSelectedDateMillis = entry.timestamp)
+    val dateFormatter = remember { SimpleDateFormat("dd MMM yyyy", Locale.getDefault()) }
+    val selectedDate = datePickerState.selectedDateMillis ?: entry.timestamp
+    val selectedDateLabel = remember(selectedDate) { dateFormatter.format(Date(selectedDate)) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("編輯交易") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                OutlinedTextField(
+                    value = amountText,
+                    onValueChange = { amountText = it },
+                    label = { Text("金額") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    singleLine = true
+                )
+                OutlinedTextField(
+                    value = noteText,
+                    onValueChange = { noteText = it },
+                    label = { Text("備註") }
+                )
+                TextButton(onClick = { showDatePicker = true }) {
+                    Icon(Icons.Default.CalendarToday, contentDescription = null)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(selectedDateLabel)
+                }
+                TextButton(
+                    onClick = onDelete,
+                    colors = ButtonDefaults.textButtonColors(contentColor = FunctionalRed)
+                ) {
+                    Icon(Icons.Default.Delete, contentDescription = null)
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("刪除此筆")
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    val amount = amountText.toDoubleOrNull() ?: return@Button
+                    onSave(
+                        entry.copy(
+                            amount = amount,
+                            note = noteText.ifBlank { null },
+                            timestamp = selectedDate
+                        )
+                    )
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = if (entry.type == "DEBT") DebtColor else PaymentColor)
+            ) {
+                Text("保存")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("取消")
+            }
+        }
+    )
+
+    if (showDatePicker) {
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                TextButton(onClick = { showDatePicker = false }) {
+                    Text("確認")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDatePicker = false }) {
+                    Text("取消")
+                }
+            }
+        ) {
+            DatePicker(state = datePickerState)
         }
     }
 }

@@ -222,10 +222,20 @@ fun CustomerCard(
                         color = TextSecondary
                     )
 
+                    val balanceText = when {
+                        item.balance > 0 -> "欠 ${formatter.format(item.balance)}"
+                        item.balance < 0 -> "預存 ${formatter.format(kotlin.math.abs(item.balance))}"
+                        else -> "已結清"
+                    }
+                    val balanceColor = when {
+                        item.balance > 0 -> DebtColor
+                        item.balance < 0 -> PaymentColor
+                        else -> TextSecondary
+                    }
                     Text(
-                        text = if (item.balance > 0) "欠 ${formatter.format(item.balance)}" else "無欠款",
+                        text = balanceText,
                         style = MaterialTheme.typography.bodyMedium,
-                        color = if (item.balance > 0) DebtColor else PaymentColor,
+                        color = balanceColor,
                         fontWeight = FontWeight.Bold
                     )
                 }

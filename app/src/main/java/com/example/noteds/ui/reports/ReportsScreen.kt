@@ -1,6 +1,8 @@
 package com.example.noteds.ui.reports
 
 import android.graphics.Paint
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -12,6 +14,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
@@ -27,6 +30,7 @@ import androidx.compose.ui.unit.sp
 import com.example.noteds.ui.theme.*
 import java.text.NumberFormat
 import java.util.Locale
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -40,6 +44,32 @@ fun ReportsScreen(
     val averageCollectionPeriod by reportsViewModel.averageCollectionPeriod.collectAsState()
 
     val currencyFormatter = remember { NumberFormat.getCurrencyInstance(Locale.getDefault()) }
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+
+    val exportLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/zip")
+    ) { uri ->
+        uri?.let {
+            reportsViewModel.exportBackup(it) { success, message ->
+                scope.launch {
+                    snackbarHostState.showSnackbar(message ?: if (success) "備份完成" else "備份失敗")
+                }
+            }
+        }
+    }
+
+    val importLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri ->
+        uri?.let {
+            reportsViewModel.importBackup(it) { success, message ->
+                scope.launch {
+                    snackbarHostState.showSnackbar(message ?: if (success) "導入完成" else "導入失敗")
+                }
+            }
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -48,7 +78,8 @@ fun ReportsScreen(
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MidnightBlue)
             )
         },
-        containerColor = BackgroundColor
+        containerColor = BackgroundColor,
+        snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { padding ->
         Column(
             modifier = Modifier
@@ -64,6 +95,25 @@ fun ReportsScreen(
                  // In Compose, I put "財務報表" in TopAppBar.
                  // I can add subtitle here or rely on TopAppBar.
                  // HTML style has centered text.
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Button(
+                    onClick = { exportLauncher.launch("noteds_backup.zip") },
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.buttonColors(containerColor = MidnightBlue)
+                ) {
+                    Text("匯出備份", color = TextWhite, fontWeight = FontWeight.Bold)
+                }
+                OutlinedButton(
+                    onClick = { importLauncher.launch("application/zip") },
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("匯入備份", fontWeight = FontWeight.Bold)
+                }
             }
 
             // Monthly Bar Chart

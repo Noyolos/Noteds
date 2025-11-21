@@ -12,8 +12,11 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface CustomerDao {
-    @Query("SELECT * FROM customers ORDER BY name")
+    @Query("SELECT * FROM customers WHERE isDeleted = 0 ORDER BY name")
     fun getAllCustomers(): Flow<List<CustomerEntity>>
+
+    @Query("SELECT * FROM customers")
+    suspend fun getAllCustomersSnapshot(): List<CustomerEntity>
 
     @Query(
         """
@@ -22,6 +25,7 @@ interface CustomerDao {
                COALESCE(SUM(CASE WHEN le.type = 'PAYMENT' THEN le.amount END), 0) AS totalPayment
         FROM customers c
         LEFT JOIN ledger_entries le ON le.customerId = c.id
+        WHERE c.isDeleted = 0
         GROUP BY c.id
         ORDER BY c.name
         """
@@ -36,6 +40,9 @@ interface CustomerDao {
 
     @Delete
     suspend fun deleteCustomer(customer: CustomerEntity)
+
+    @Query("UPDATE customers SET isDeleted = 1 WHERE id = :customerId")
+    suspend fun softDeleteCustomerById(customerId: Long)
 
     @Query("SELECT * FROM customers WHERE id = :customerId LIMIT 1")
     suspend fun getCustomerById(customerId: Long): CustomerEntity?

@@ -70,7 +70,8 @@ private class ReportsViewModelFactory(
             @Suppress("UNCHECKED_CAST")
             return ReportsViewModel(
                 customerRepository = appContainer.customerRepository,
-                ledgerRepository = appContainer.ledgerRepository
+                ledgerRepository = appContainer.ledgerRepository,
+                appContext = appContainer.appContext
             ) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class: ${'$'}modelClass")
