@@ -1,11 +1,11 @@
 package com.example.noteds.ui.customers
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -15,9 +15,7 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.*
-import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -25,15 +23,18 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import coil.compose.AsyncImage
 import com.example.noteds.ui.theme.*
 import java.text.NumberFormat
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.concurrent.TimeUnit
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -53,12 +54,42 @@ fun CustomerDetailScreen(
 
     var showTransactionForm by remember { mutableStateOf<String?>(null) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
-    var showAiMessage by remember { mutableStateOf(false) }
-    var isGenerating by remember { mutableStateOf(false) }
+    var fullScreenPhoto by remember { mutableStateOf<String?>(null) }
 
     if (selected == null) {
         onClose()
         return
+    }
+
+    val profilePhotos = remember(selected.customer) {
+        listOf(
+            selected.customer.profilePhotoUri,
+            selected.customer.profilePhotoUri2,
+            selected.customer.profilePhotoUri3
+        ).filterNotNull()
+    }
+    val passportPhotos = remember(selected.customer) {
+        listOf(
+            selected.customer.passportPhotoUri,
+            selected.customer.passportPhotoUri2,
+            selected.customer.passportPhotoUri3,
+            selected.customer.idCardPhotoUri
+        ).filterNotNull()
+    }
+    val allPhotos = remember(profilePhotos, passportPhotos) {
+        (profilePhotos + passportPhotos).filter { it.isNotBlank() }
+    }
+    val primaryPhoto = profilePhotos.firstOrNull()
+
+    val lastPaymentDaysText = remember(transactions) {
+        val lastPayment = transactions
+            .filter { it.type.uppercase() == "PAYMENT" }
+            .maxByOrNull { it.timestamp }
+        lastPayment?.let {
+            val days = TimeUnit.MILLISECONDS.toDays(System.currentTimeMillis() - it.timestamp)
+                .coerceAtLeast(0)
+            "${days}天前"
+        } ?: "無記錄"
     }
 
     if (showTransactionForm != null) {
@@ -147,20 +178,33 @@ fun CustomerDetailScreen(
                             .padding(top = 16.dp, bottom = 32.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(100.dp)
-                                .clip(RoundedCornerShape(24.dp))
-                                .background(BackgroundColor)
-                                .border(4.dp, Color.White, RoundedCornerShape(24.dp)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = selected.customer.name.take(1).uppercase(),
-                                fontSize = 40.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                color = MidnightBlue
+                        if (primaryPhoto != null) {
+                            AsyncImage(
+                                model = primaryPhoto,
+                                contentDescription = null,
+                                modifier = Modifier
+                                    .size(120.dp)
+                                    .clip(RoundedCornerShape(24.dp))
+                                    .border(4.dp, Color.White, RoundedCornerShape(24.dp))
+                                    .clickable { fullScreenPhoto = primaryPhoto },
+                                contentScale = ContentScale.Crop
                             )
+                        } else {
+                            Box(
+                                modifier = Modifier
+                                    .size(100.dp)
+                                    .clip(RoundedCornerShape(24.dp))
+                                    .background(BackgroundColor)
+                                    .border(4.dp, Color.White, RoundedCornerShape(24.dp)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = selected.customer.name.take(1).uppercase(),
+                                    fontSize = 40.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = MidnightBlue
+                                )
+                            }
                         }
                         Spacer(modifier = Modifier.height(16.dp))
                         Text(
@@ -175,98 +219,6 @@ fun CustomerDetailScreen(
                             color = TextSecondary,
                             fontWeight = FontWeight.Medium
                         )
-
-                        // Generate Reminder Button (AI)
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Button(
-                            onClick = {
-                                isGenerating = true
-                                // Simulate delay
-                                showAiMessage = true
-                                isGenerating = false
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = MidnightBlue.copy(alpha = 0.1f)),
-                            shape = CircleShape,
-                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                            enabled = !isGenerating
-                        ) {
-                            if (isGenerating) {
-                                Text("生成中...", color = MidnightBlue, style = MaterialTheme.typography.labelMedium)
-                            } else {
-                                Icon(Icons.Default.Star, contentDescription = null, tint = MidnightBlue, modifier = Modifier.size(16.dp)) // Sparkles substitute
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("生成催款訊息", color = MidnightBlue, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-                            }
-                        }
-                    }
-                }
-
-                // Passport Photo (Preview)
-                if (selected.customer.passportPhotoUri != null) {
-                    item {
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 24.dp, vertical = 8.dp),
-                            shape = RoundedCornerShape(16.dp),
-                            colors = CardDefaults.cardColors(containerColor = CardSurface),
-                            elevation = CardDefaults.cardElevation(2.dp) // shadow-soft
-                        ) {
-                            Column(modifier = Modifier.padding(16.dp)) {
-                                Text("證件照片", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = TextSecondary, modifier = Modifier.padding(bottom = 8.dp))
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(120.dp)
-                                        .clip(RoundedCornerShape(12.dp))
-                                        .background(BackgroundColor)
-                                        .border(2.dp, Color.LightGray, RoundedCornerShape(12.dp), /* dashed? No simple dashed in Compose without path effect, keeping solid */)
-                                        .clickable { /* View */ },
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text("已存檔", color = TextSecondary, style = MaterialTheme.typography.bodySmall)
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // AI Message Box
-                if (showAiMessage) {
-                    item {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 24.dp, vertical = 8.dp)
-                                .clip(RoundedCornerShape(16.dp))
-                                .background(CardSurface)
-                                .border(1.dp, VibrantOrange.copy(alpha = 0.2f), RoundedCornerShape(16.dp))
-                        ) {
-                            Column(modifier = Modifier.padding(16.dp)) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(Icons.Default.Star, contentDescription = null, tint = VibrantOrange, modifier = Modifier.size(12.dp))
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text("AI 建議文案", color = VibrantOrange, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
-                                    Spacer(modifier = Modifier.weight(1f))
-                                    Icon(Icons.Default.Close, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(16.dp).clickable { showAiMessage = false })
-                                }
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Text(
-                                    "您好 ${selected.customer.name}，這是一個溫馨提醒。您目前的未結餘額為 RM ${currencyFormatter.format(selected.balance)}。如方便請安排付款，謝謝！",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = TextSecondary
-                                )
-                                Spacer(modifier = Modifier.height(12.dp))
-                                OutlinedButton(
-                                    onClick = { /* Copy */ },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    border = BorderStroke(1.dp, MidnightBlue.copy(alpha = 0.2f)),
-                                    shape = RoundedCornerShape(12.dp)
-                                ) {
-                                    Text("複製文案", color = MidnightBlue, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-                                }
-                            }
-                        }
                     }
                 }
 
@@ -301,13 +253,45 @@ fun CustomerDetailScreen(
                                 Spacer(modifier = Modifier.height(16.dp))
                                 Divider(color = TextWhite.copy(alpha = 0.1f))
                                 Spacer(modifier = Modifier.height(16.dp))
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Text("信用評級: A+", color = TextWhite.copy(alpha = 0.8f), style = MaterialTheme.typography.bodySmall)
-                                    Text("最後交易: 3天前", color = TextWhite.copy(alpha = 0.8f), style = MaterialTheme.typography.bodySmall)
+                                Row(modifier = Modifier.fillMaxWidth()) {
+                                    Text(
+                                        "最近一次還款: $lastPaymentDaysText",
+                                        color = TextWhite.copy(alpha = 0.8f),
+                                        style = MaterialTheme.typography.bodySmall
+                                    )
                                 }
+                            }
+                        }
+                    }
+                }
+
+                if (allPhotos.isNotEmpty()) {
+                    item {
+                        Text(
+                            text = "照片畫廊",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = TextPrimary,
+                            modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)
+                        )
+                    }
+                    item {
+                        LazyRow(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 24.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            items(allPhotos) { photo ->
+                                AsyncImage(
+                                    model = photo,
+                                    contentDescription = null,
+                                    modifier = Modifier
+                                        .size(120.dp)
+                                        .clip(RoundedCornerShape(16.dp))
+                                        .clickable { fullScreenPhoto = photo },
+                                    contentScale = ContentScale.Crop
+                                )
                             }
                         }
                     }
@@ -367,6 +351,39 @@ fun CustomerDetailScreen(
                     }
                 }
             )
+        }
+
+        fullScreenPhoto?.let { uri ->
+            FullScreenImageDialog(photoUri = uri) {
+                fullScreenPhoto = null
+            }
+        }
+    }
+}
+
+@Composable
+fun FullScreenImageDialog(photoUri: String, onDismiss: () -> Unit) {
+    Dialog(onDismissRequest = onDismiss) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.9f)),
+            contentAlignment = Alignment.Center
+        ) {
+            AsyncImage(
+                model = photoUri,
+                contentDescription = null,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .fillMaxHeight(),
+                contentScale = ContentScale.Fit
+            )
+            IconButton(
+                onClick = onDismiss,
+                modifier = Modifier.align(Alignment.TopEnd).padding(16.dp)
+            ) {
+                Icon(Icons.Default.Close, contentDescription = null, tint = Color.White)
+            }
         }
     }
 }

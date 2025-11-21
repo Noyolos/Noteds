@@ -1,5 +1,6 @@
 package com.example.noteds.ui.reports
 
+import android.graphics.Paint
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -18,6 +19,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.noteds.ui.theme.*
@@ -33,6 +35,7 @@ fun ReportsScreen(
     val agingStats by reportsViewModel.agingStats.collectAsState()
     val topDebtors by reportsViewModel.topDebtors.collectAsState()
     val totalTransactions by reportsViewModel.totalTransactions.collectAsState()
+    val averageCollectionPeriod by reportsViewModel.averageCollectionPeriod.collectAsState()
 
     val currencyFormatter = remember { NumberFormat.getCurrencyInstance(Locale.getDefault()) }
 
@@ -101,7 +104,7 @@ fun ReportsScreen(
                 )
                 InsightCard(
                     title = "平均回款週期",
-                    value = "12 天",
+                    value = String.format(Locale.getDefault(), "%.0f 天", averageCollectionPeriod),
                     borderColor = VibrantOrange
                 )
             }
@@ -173,38 +176,51 @@ fun MonthlyBarChart(stats: List<MonthlyStats>, modifier: Modifier) {
         val groupWidth = size.width / stats.size
         val barWidth = groupWidth * 0.35f
         val gap = groupWidth * 0.1f
-        val height = size.height
+        val labelSpace = 24.dp.toPx()
+        val chartHeight = size.height - labelSpace
+        val textPaint = Paint().apply {
+            color = Color.Gray.toArgb()
+            textSize = 12.sp.toPx()
+            textAlign = Paint.Align.CENTER
+        }
 
         stats.forEachIndexed { index, stat ->
             val centerX = index * groupWidth + groupWidth / 2
 
             // Debt Bar (Left)
-            val debtHeight = (stat.debt.toFloat() / maxVal) * height * 0.9f // Scale 0.9 to leave top space
+            val debtHeight = (stat.debt.toFloat() / maxVal) * chartHeight * 0.9f // Scale 0.9 to leave top space
             if (debtHeight > 0) {
                 drawRoundRect(
                     color = DebtColor,
-                    topLeft = Offset(centerX - barWidth - gap/2, height - debtHeight),
+                    topLeft = Offset(centerX - barWidth - gap/2, chartHeight - debtHeight),
                     size = Size(barWidth, debtHeight),
                     cornerRadius = CornerRadius(4.dp.toPx())
                 )
             }
 
             // Payment Bar (Right)
-            val paymentHeight = (stat.payment.toFloat() / maxVal) * height * 0.9f
+            val paymentHeight = (stat.payment.toFloat() / maxVal) * chartHeight * 0.9f
             if (paymentHeight > 0) {
                  drawRoundRect(
                     color = PaymentColor,
-                    topLeft = Offset(centerX + gap/2, height - paymentHeight),
+                    topLeft = Offset(centerX + gap/2, chartHeight - paymentHeight),
                     size = Size(barWidth, paymentHeight),
                     cornerRadius = CornerRadius(4.dp.toPx())
                 )
             }
+
+            drawContext.canvas.nativeCanvas.drawText(
+                stat.month,
+                centerX,
+                chartHeight + textPaint.textSize,
+                textPaint
+            )
         }
         // Axis line?
         drawLine(
             color = Color.LightGray.copy(alpha=0.5f),
-            start = Offset(0f, height),
-            end = Offset(size.width, height),
+            start = Offset(0f, chartHeight),
+            end = Offset(size.width, chartHeight),
             strokeWidth = 1.dp.toPx()
         )
     }

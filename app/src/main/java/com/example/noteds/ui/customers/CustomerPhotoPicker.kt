@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -167,6 +168,142 @@ fun CustomerPhotoPicker(
                     }
                 }) {
                     Text("Cancel")
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalPermissionsApi::class)
+@Composable
+fun PhotoGrid(
+    title: String,
+    subtitle: String,
+    photoUris: List<String?>,
+    onPhotoChanged: (Int, String?) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    val authority = remember(context.packageName) { "${context.packageName}.fileprovider" }
+    val slots = List(3) { photoUris.getOrNull(it) }
+
+    var selectedIndex by remember { mutableStateOf(0) }
+    var showSheet by remember { mutableStateOf(false) }
+    var pendingCamera by remember { mutableStateOf(false) }
+    var latestTempUri by remember { mutableStateOf<Uri?>(null) }
+    val cameraPermissionState = rememberPermissionState(Manifest.permission.CAMERA)
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val coroutineScope = rememberCoroutineScope()
+
+    val takePictureLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicture()
+    ) { success ->
+        if (success) {
+            latestTempUri?.let { uri ->
+                onPhotoChanged(selectedIndex, uri.toString())
+            }
+        }
+    }
+
+    val galleryLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri ->
+        uri?.let { onPhotoChanged(selectedIndex, it.toString()) }
+        showSheet = false
+    }
+
+    fun launchCamera() {
+        val uri = createTempImageUri(context, authority)
+        latestTempUri = uri
+        if (uri != null) {
+            takePictureLauncher.launch(uri)
+        }
+        showSheet = false
+    }
+
+    LaunchedEffect(cameraPermissionState.status) {
+        if (pendingCamera) {
+            if (cameraPermissionState.status.isGranted) {
+                pendingCamera = false
+                launchCamera()
+            } else {
+                pendingCamera = false
+            }
+        }
+    }
+
+    Column(modifier = modifier) {
+        Text(text = title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+        Text(
+            text = subtitle,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 12.dp)
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            slots.forEachIndexed { index, uri ->
+                Box(
+                    modifier = Modifier
+                        .size(96.dp)
+                        .clip(MaterialTheme.shapes.medium)
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                        .clickable {
+                            selectedIndex = index
+                            showSheet = true
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (uri != null) {
+                        AsyncImage(
+                            model = ImageRequest.Builder(context)
+                                .data(uri)
+                                .crossfade(true)
+                                .build(),
+                            contentDescription = null,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    } else {
+                        Text(
+                            text = "點擊上傳",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    if (showSheet) {
+        ModalBottomSheet(
+            onDismissRequest = { showSheet = false },
+            sheetState = sheetState
+        ) {
+            Column(
+                modifier = Modifier
+                    .padding(24.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(text = "選擇照片來源", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                TextButton(onClick = {
+                    if (cameraPermissionState.status.isGranted) {
+                        launchCamera()
+                    } else {
+                        pendingCamera = true
+                        cameraPermissionState.launchPermissionRequest()
+                    }
+                }) {
+                    Text("拍照")
+                }
+                TextButton(onClick = { galleryLauncher.launch("image/*") }) {
+                    Text("從相冊選擇")
+                }
+                TextButton(onClick = {
+                    coroutineScope.launch { sheetState.hide() }.invokeOnCompletion {
+                        showSheet = false
+                    }
+                }) {
+                    Text("取消")
                 }
             }
         }

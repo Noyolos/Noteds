@@ -1,25 +1,19 @@
 package com.example.noteds.ui.customers
 
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.CameraAlt
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -50,21 +44,17 @@ fun EditCustomerScreen(
     var name by remember { mutableStateOf(customer.name) }
     var phone by remember { mutableStateOf(customer.phone) }
     var note by remember { mutableStateOf(customer.note) }
-    var profilePhotoUri by remember { mutableStateOf(customer.profilePhotoUri) }
-    var passportPhotoUri by remember { mutableStateOf(customer.passportPhotoUri) }
+    val profilePhotos = remember {
+        mutableStateListOf(customer.profilePhotoUri, customer.profilePhotoUri2, customer.profilePhotoUri3)
+    }
+    val passportPhotos = remember {
+        mutableStateListOf(
+            customer.passportPhotoUri ?: customer.idCardPhotoUri,
+            customer.passportPhotoUri2,
+            customer.passportPhotoUri3
+        )
+    }
     var showDeleteConfirm by remember { mutableStateOf(false) }
-
-    val profilePhotoLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri ->
-        uri?.let { profilePhotoUri = it.toString() }
-    }
-
-    val passportPhotoLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri ->
-        uri?.let { passportPhotoUri = it.toString() }
-    }
 
     Scaffold(
         topBar = {
@@ -82,14 +72,15 @@ fun EditCustomerScreen(
             Button(
                 onClick = {
                     if (name.isNotBlank()) {
-                        val updatedCustomer = customer.copy(
+                        customerViewModel.updateCustomer(
+                            customerId = customerId,
                             name = name,
                             phone = phone,
                             note = note,
-                            profilePhotoUri = profilePhotoUri,
-                            passportPhotoUri = passportPhotoUri
+                            profilePhotoUris = profilePhotos.toList(),
+                            passportPhotoUris = passportPhotos.toList(),
+                            repaymentDate = customer.expectedRepaymentDate
                         )
-                        customerViewModel.updateCustomer(updatedCustomer)
                         onSaved()
                     }
                 },
@@ -113,40 +104,12 @@ fun EditCustomerScreen(
                 .padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(24.dp)
         ) {
-            // Profile Photo
-            Box(
-                modifier = Modifier.fillMaxWidth(),
-                contentAlignment = Alignment.Center
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(100.dp)
-                        .clip(CircleShape)
-                        .background(if (profilePhotoUri != null) CardSurface else BackgroundColor)
-                        .border(2.dp, if (profilePhotoUri != null) MidnightBlue else Color.LightGray, CircleShape)
-                        .clickable { profilePhotoLauncher.launch("image/*") },
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (profilePhotoUri != null) {
-                         // Assuming AsyncImage would be here
-                         Text("Photo", color = MidnightBlue, fontWeight = FontWeight.Bold)
-                    } else {
-                        Icon(Icons.Default.CameraAlt, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(32.dp))
-                    }
-                }
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .offset(x = 36.dp, y = (-4).dp)
-                        .size(24.dp)
-                        .clip(CircleShape)
-                        .background(VibrantOrange)
-                        .border(2.dp, CardSurface, CircleShape),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(Icons.Default.Add, contentDescription = null, tint = TextWhite, modifier = Modifier.size(16.dp))
-                }
-            }
+            PhotoGrid(
+                title = "頭像照片",
+                subtitle = "可拍照或相冊上傳，最多 3 張",
+                photoUris = profilePhotos,
+                onPhotoChanged = { index, uri -> profilePhotos[index] = uri }
+            )
 
             // Basic Info
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -184,31 +147,12 @@ fun EditCustomerScreen(
                 )
             }
 
-            // Passport Photo
-            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                Text("證件資料", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = TextSecondary)
-
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(100.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(CardSurface)
-                        .border(2.dp, if (passportPhotoUri != null) MidnightBlue.copy(alpha = 0.1f) else Color.LightGray, RoundedCornerShape(12.dp))
-                        .clickable { passportPhotoLauncher.launch("image/*") },
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (passportPhotoUri != null) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.CheckCircle, contentDescription = null, tint = MidnightBlue)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("已選取護照/IC照片", color = MidnightBlue, fontWeight = FontWeight.Bold)
-                        }
-                    } else {
-                         Text("點擊上傳護照 / IC 照片", color = TextSecondary, style = MaterialTheme.typography.bodySmall)
-                    }
-                }
-            }
+            PhotoGrid(
+                title = "證件照片",
+                subtitle = "護照 / 證件最多 3 張",
+                photoUris = passportPhotos,
+                onPhotoChanged = { index, uri -> passportPhotos[index] = uri }
+            )
 
             // Delete Button
             OutlinedButton(

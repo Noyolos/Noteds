@@ -10,9 +10,13 @@ data class CustomerEntity(
     val phone: String,
     val note: String,
     val profilePhotoUri: String? = null,
+    val profilePhotoUri2: String? = null,
+    val profilePhotoUri3: String? = null,
     val idCardPhotoUri: String? = null,
     // New fields
     val passportPhotoUri: String? = null,
+    val passportPhotoUri2: String? = null,
+    val passportPhotoUri3: String? = null,
     val expectedRepaymentDate: Long? = null,
     val initialTransactionDone: Boolean = false
 )
