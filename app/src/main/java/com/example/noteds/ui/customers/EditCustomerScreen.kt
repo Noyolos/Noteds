@@ -41,6 +41,7 @@ fun EditCustomerScreen(
         return
     }
 
+    var code by remember { mutableStateOf(customer.code) }
     var name by remember { mutableStateOf(customer.name) }
     var phone by remember { mutableStateOf(customer.phone) }
     var note by remember { mutableStateOf(customer.note) }
@@ -74,6 +75,7 @@ fun EditCustomerScreen(
                     if (name.isNotBlank()) {
                         customerViewModel.updateCustomer(
                             customerId = customerId,
+                            code = code,
                             name = name,
                             phone = phone,
                             note = note,
@@ -114,6 +116,22 @@ fun EditCustomerScreen(
             // Basic Info
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 Text("基本資料", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = TextSecondary)
+
+                OutlinedTextField(
+                    value = code,
+                    onValueChange = { code = it },
+                    placeholder = { Text("客戶編號") },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedContainerColor = CardSurface,
+                        unfocusedContainerColor = CardSurface,
+                        focusedBorderColor = MidnightBlue,
+                        unfocusedBorderColor = Color.Transparent
+                    ),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                    textStyle = MaterialTheme.typography.bodyLarge.copy(color = MidnightBlue)
+                )
 
                 OutlinedTextField(
                     value = name,

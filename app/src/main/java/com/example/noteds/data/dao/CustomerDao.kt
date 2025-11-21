@@ -7,12 +7,26 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
 import com.example.noteds.data.entity.CustomerEntity
+import com.example.noteds.data.model.CustomerWithBalance
 import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface CustomerDao {
     @Query("SELECT * FROM customers ORDER BY name")
     fun getAllCustomers(): Flow<List<CustomerEntity>>
+
+    @Query(
+        """
+        SELECT c.*, 
+               COALESCE(SUM(CASE WHEN le.type = 'DEBT' THEN le.amount END), 0) AS totalDebt,
+               COALESCE(SUM(CASE WHEN le.type = 'PAYMENT' THEN le.amount END), 0) AS totalPayment
+        FROM customers c
+        LEFT JOIN ledger_entries le ON le.customerId = c.id
+        GROUP BY c.id
+        ORDER BY c.name
+        """
+    )
+    fun getCustomersWithBalance(): Flow<List<CustomerWithBalance>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertCustomer(customer: CustomerEntity): Long

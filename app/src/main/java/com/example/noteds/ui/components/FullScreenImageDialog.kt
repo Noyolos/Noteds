@@ -1,10 +1,14 @@
 package com.example.noteds.ui.components
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
@@ -23,7 +27,8 @@ import coil.request.ImageRequest
 @Composable
 fun FullScreenImageDialog(
     photoUri: String,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    onDownload: (() -> Unit)? = null
 ) {
     Dialog(
         onDismissRequest = onDismiss,
@@ -31,6 +36,31 @@ fun FullScreenImageDialog(
     ) {
         Surface(color = Color.Black.copy(alpha = 0.9f)) {
             Box(modifier = Modifier.fillMaxSize()) {
+                Row(
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(onClick = onDismiss) {
+                        Icon(
+                            imageVector = Icons.Rounded.Close,
+                            contentDescription = null,
+                            tint = Color.White
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    if (onDownload != null) {
+                        IconButton(onClick = onDownload) {
+                            Icon(
+                                imageVector = Icons.Rounded.Download,
+                                contentDescription = null,
+                                tint = Color.White
+                            )
+                        }
+                    }
+                }
+
                 AsyncImage(
                     model = ImageRequest.Builder(LocalContext.current)
                         .data(photoUri)
@@ -42,19 +72,6 @@ fun FullScreenImageDialog(
                         .align(Alignment.Center)
                         .padding(24.dp)
                 )
-
-                IconButton(
-                    onClick = onDismiss,
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .padding(16.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Close,
-                        contentDescription = null,
-                        tint = Color.White
-                    )
-                }
             }
         }
     }
