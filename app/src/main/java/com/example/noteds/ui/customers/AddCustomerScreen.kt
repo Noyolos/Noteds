@@ -49,20 +49,34 @@ fun AddCustomerScreen(
     // Initial Debt Date
     var purchaseDate by remember { mutableStateOf("2025-11-20") } // Mock default like HTML
 
-    // Photo URIs
-    var profilePhotoUri by remember { mutableStateOf<String?>(null) }
-    var passportPhotoUri by remember { mutableStateOf<String?>(null) }
+    // Photo URIs lists (3 slots each)
+    val profilePhotoUris = remember { mutableStateListOf<String?>(null, null, null) }
+    val passportPhotoUris = remember { mutableStateListOf<String?>(null, null, null) }
 
-    val profilePhotoLauncher = rememberLauncherForActivityResult(
+    // Launchers - we need separate logic or pass index to launcher if we want to support multiple slots properly
+    // Or just update the specific index.
+    // Compose launchers must be registered at top level.
+    // A trick is to have one launcher and a state variable holding which index initiated the request.
+
+    var currentPhotoType by remember { mutableStateOf<String?>(null) } // "PROFILE" or "PASSPORT"
+    var currentPhotoIndex by remember { mutableIntStateOf(-1) }
+
+    val photoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri ->
-        uri?.let { profilePhotoUri = it.toString() }
+        uri?.let {
+            if (currentPhotoType == "PROFILE" && currentPhotoIndex in 0..2) {
+                profilePhotoUris[currentPhotoIndex] = it.toString()
+            } else if (currentPhotoType == "PASSPORT" && currentPhotoIndex in 0..2) {
+                passportPhotoUris[currentPhotoIndex] = it.toString()
+            }
+        }
     }
 
-    val passportPhotoLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri ->
-        uri?.let { passportPhotoUri = it.toString() }
+    fun launchPhotoPicker(type: String, index: Int) {
+        currentPhotoType = type
+        currentPhotoIndex = index
+        photoPickerLauncher.launch("image/*")
     }
 
     Scaffold(
@@ -85,8 +99,8 @@ fun AddCustomerScreen(
                             name = name,
                             phone = phone,
                             note = note,
-                            profilePhotoUri = profilePhotoUri,
-                            passportPhotoUri = passportPhotoUri,
+                            profilePhotoUris = profilePhotoUris,
+                            passportPhotoUris = passportPhotoUris,
                             initialDebtAmount = initialAmount.toDoubleOrNull(),
                             initialDebtNote = "初始欠款",
                             initialDebtDate = System.currentTimeMillis(),
@@ -115,41 +129,17 @@ fun AddCustomerScreen(
                 .padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(24.dp)
         ) {
-            // Profile Photo
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .wrapContentHeight(),
-                contentAlignment = Alignment.Center
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(100.dp)
-                        .clip(CircleShape)
-                        .background(if (profilePhotoUri != null) CardSurface else BackgroundColor)
-                        .border(2.dp, if (profilePhotoUri != null) MidnightBlue else Color.LightGray, CircleShape) // Dashed ideally
-                        .clickable { profilePhotoLauncher.launch("image/*") },
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (profilePhotoUri != null) {
-                         // Since we don't have coil, we mock with text, but in real app AsyncImage would be here
-                         Text("Photo", color = MidnightBlue, fontWeight = FontWeight.Bold)
-                    } else {
-                        Icon(Icons.Default.CameraAlt, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(32.dp))
-                    }
-                }
-                // Plus Badge
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .offset(x = 36.dp, y = (-4).dp)
-                        .size(24.dp)
-                        .clip(CircleShape)
-                        .background(VibrantOrange)
-                        .border(2.dp, CardSurface, CircleShape),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(Icons.Default.Add, contentDescription = null, tint = TextWhite, modifier = Modifier.size(16.dp))
+            // Profile Photos (3 Slots)
+            Text("頭像照片 (最多3張)", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = TextSecondary)
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                for (i in 0..2) {
+                    PhotoSlot(
+                        uri = profilePhotoUris[i],
+                        onClick = { launchPhotoPicker("PROFILE", i) },
+                        modifier = Modifier.size(80.dp),
+                        shape = CircleShape,
+                        placeholderIcon = Icons.Default.Person
+                    )
                 }
             }
 
@@ -189,32 +179,17 @@ fun AddCustomerScreen(
                 )
             }
 
-            // Passport Photo
-            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                Text("證件資料", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = TextSecondary)
-
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(100.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(CardSurface)
-                        .border(2.dp, if (passportPhotoUri != null) MidnightBlue.copy(alpha = 0.1f) else Color.LightGray, RoundedCornerShape(12.dp)) // Simulate dashed with gray
-                        .clickable { passportPhotoLauncher.launch("image/*") },
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (passportPhotoUri != null) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.CheckCircle, contentDescription = null, tint = MidnightBlue)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("已選取護照/IC照片", color = MidnightBlue, fontWeight = FontWeight.Bold)
-                        }
-                    } else {
-                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            // Icon(Icons.Default.FileText, ... )
-                            Text("點擊上傳護照 / IC 照片", color = TextSecondary, style = MaterialTheme.typography.bodySmall)
-                        }
-                    }
+            // Passport Photos (3 Slots)
+            Text("證件資料 (最多3張)", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = TextSecondary)
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                for (i in 0..2) {
+                    PhotoSlot(
+                        uri = passportPhotoUris[i],
+                        onClick = { launchPhotoPicker("PASSPORT", i) },
+                        modifier = Modifier.size(80.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        placeholderIcon = Icons.Default.CameraAlt
+                    )
                 }
             }
 
@@ -264,6 +239,42 @@ fun AddCustomerScreen(
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+fun PhotoSlot(
+    uri: String?,
+    onClick: () -> Unit,
+    modifier: Modifier,
+    shape: androidx.compose.ui.graphics.Shape,
+    placeholderIcon: androidx.compose.ui.graphics.vector.ImageVector
+) {
+    Box(
+        modifier = modifier
+            .clip(shape)
+            .background(if (uri != null) CardSurface else BackgroundColor)
+            .border(2.dp, if (uri != null) MidnightBlue else Color.LightGray, shape)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        if (uri != null) {
+             // In real app: AsyncImage(model = uri, contentScale = ContentScale.Crop)
+             Text("Photo", color = MidnightBlue, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall)
+        } else {
+            Icon(placeholderIcon, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(24.dp))
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(4.dp)
+                    .size(16.dp)
+                    .clip(CircleShape)
+                    .background(VibrantOrange),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(Icons.Default.Add, contentDescription = null, tint = TextWhite, modifier = Modifier.size(10.dp))
             }
         }
     }

@@ -34,8 +34,8 @@ class CustomerViewModel(
         name: String,
         phone: String,
         note: String,
-        profilePhotoUri: String?,
-        passportPhotoUri: String?,
+        profilePhotoUris: List<String?>,
+        passportPhotoUris: List<String?>,
         initialDebtAmount: Double?,
         initialDebtNote: String?,
         initialDebtDate: Long?,
@@ -46,8 +46,12 @@ class CustomerViewModel(
                 name = name,
                 phone = phone,
                 note = note,
-                profilePhotoUri = profilePhotoUri,
-                passportPhotoUri = passportPhotoUri,
+                profilePhotoUri = profilePhotoUris.getOrNull(0),
+                profilePhotoUri2 = profilePhotoUris.getOrNull(1),
+                profilePhotoUri3 = profilePhotoUris.getOrNull(2),
+                passportPhotoUri = passportPhotoUris.getOrNull(0),
+                passportPhotoUri2 = passportPhotoUris.getOrNull(1),
+                passportPhotoUri3 = passportPhotoUris.getOrNull(2),
                 expectedRepaymentDate = repaymentDate,
                 initialTransactionDone = initialDebtAmount != null && initialDebtAmount > 0
             )
@@ -76,28 +80,6 @@ class CustomerViewModel(
         viewModelScope.launch {
             customerRepository.deleteCustomerById(customerId)
             ledgerRepository.deleteEntriesForCustomer(customerId)
-        }
-    }
-
-    fun updateProfilePhoto(customerId: Long, photoUri: String?) {
-        updateCustomerPhotoInternal(customerId) { current ->
-            current.copy(profilePhotoUri = photoUri)
-        }
-    }
-
-    fun updatePassportPhoto(customerId: Long, photoUri: String?) {
-        updateCustomerPhotoInternal(customerId) { current ->
-            current.copy(passportPhotoUri = photoUri)
-        }
-    }
-
-    private fun updateCustomerPhotoInternal(
-        customerId: Long,
-        transform: (CustomerEntity) -> CustomerEntity
-    ) {
-        viewModelScope.launch {
-            val existing = customerRepository.getCustomerById(customerId) ?: return@launch
-            customerRepository.updateCustomer(transform(existing))
         }
     }
 

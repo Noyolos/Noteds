@@ -18,6 +18,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.noteds.ui.theme.*
@@ -33,6 +34,7 @@ fun ReportsScreen(
     val agingStats by reportsViewModel.agingStats.collectAsState()
     val topDebtors by reportsViewModel.topDebtors.collectAsState()
     val totalTransactions by reportsViewModel.totalTransactions.collectAsState()
+    val averageCollectionPeriod by reportsViewModel.averageCollectionPeriod.collectAsState()
 
     val currencyFormatter = remember { NumberFormat.getCurrencyInstance(Locale.getDefault()) }
 
@@ -55,10 +57,6 @@ fun ReportsScreen(
         ) {
              // Header Title inside body to match HTML style
             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
-                 // HTML has header "財務報表" and subtitle "全面經營分析" inside the blue header.
-                 // In Compose, I put "財務報表" in TopAppBar.
-                 // I can add subtitle here or rely on TopAppBar.
-                 // HTML style has centered text.
             }
 
             // Monthly Bar Chart
@@ -79,8 +77,7 @@ fun ReportsScreen(
                          Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 8.dp)) {
                             Box(modifier = Modifier.size(12.dp).background(Color(stat.colorHex), androidx.compose.foundation.shape.CircleShape))
                             Spacer(modifier = Modifier.width(4.dp))
-                            // Extract "0-30" from "0-30 Days"
-                            val label = stat.bucket.replace(" Days", "")
+                            val label = stat.bucket.replace(" Days", "天") // Translate 'Days' to Chinese
                             Text(label, style = MaterialTheme.typography.labelSmall, color = TextSecondary)
                         }
                     }
@@ -100,8 +97,8 @@ fun ReportsScreen(
                     borderColor = MidnightBlue
                 )
                 InsightCard(
-                    title = "平均回款週期",
-                    value = "12 天",
+                    title = "平均回款週期 (DSO)",
+                    value = "$averageCollectionPeriod 天",
                     borderColor = VibrantOrange
                 )
             }
@@ -160,26 +157,20 @@ fun ChartCard(title: String, content: @Composable () -> Unit) {
 
 @Composable
 fun MonthlyBarChart(stats: List<MonthlyStats>, modifier: Modifier) {
-    // ... (Same logic, maybe colors check)
-    // HTML colors: Debt #D50000, Payment #00C853
-    // My Color.kt: DebtColor=#D50000, PaymentColor=#00C853. Correct.
-
     if (stats.isEmpty()) return
 
     Canvas(modifier = modifier) {
         val maxVal = stats.maxOfOrNull { maxOf(it.debt, it.payment) }?.toFloat() ?: 1f
-        // In HTML chart.js, bars are side-by-side per month.
-        // Here we draw them.
         val groupWidth = size.width / stats.size
         val barWidth = groupWidth * 0.35f
         val gap = groupWidth * 0.1f
-        val height = size.height
+        val height = size.height * 0.85f // Reserve bottom space for labels
 
         stats.forEachIndexed { index, stat ->
             val centerX = index * groupWidth + groupWidth / 2
 
             // Debt Bar (Left)
-            val debtHeight = (stat.debt.toFloat() / maxVal) * height * 0.9f // Scale 0.9 to leave top space
+            val debtHeight = (stat.debt.toFloat() / maxVal) * height
             if (debtHeight > 0) {
                 drawRoundRect(
                     color = DebtColor,
@@ -190,7 +181,7 @@ fun MonthlyBarChart(stats: List<MonthlyStats>, modifier: Modifier) {
             }
 
             // Payment Bar (Right)
-            val paymentHeight = (stat.payment.toFloat() / maxVal) * height * 0.9f
+            val paymentHeight = (stat.payment.toFloat() / maxVal) * height
             if (paymentHeight > 0) {
                  drawRoundRect(
                     color = PaymentColor,
@@ -199,8 +190,23 @@ fun MonthlyBarChart(stats: List<MonthlyStats>, modifier: Modifier) {
                     cornerRadius = CornerRadius(4.dp.toPx())
                 )
             }
+
+            // X-Axis Label
+            drawContext.canvas.nativeCanvas.apply {
+                drawText(
+                    stat.month,
+                    centerX,
+                    size.height,
+                    android.graphics.Paint().apply {
+                        color = android.graphics.Color.GRAY
+                        textSize = 32f // Adjust size
+                        textAlign = android.graphics.Paint.Align.CENTER
+                    }
+                )
+            }
         }
-        // Axis line?
+
+        // Axis line
         drawLine(
             color = Color.LightGray.copy(alpha=0.5f),
             start = Offset(0f, height),
@@ -216,17 +222,6 @@ fun AgingDonutChart(stats: List<AgingData>, modifier: Modifier) {
     val total = stats.sumOf { it.amount }
     if (total == 0.0) return
 
-    // HTML Colors:
-    // 0-30: #4CAF50 (Green)
-    // 31-60: #FFC107 (Amber)
-    // 61-90: #FF9800 (Orange)
-    // 90+: #F44336 (Red)
-
-    // Override colors locally to match HTML strictly if not matched in VM
-    // VM uses: 0xFF00C853, 0xFFFFAB00, 0xFFFF6D00, 0xFFD50000
-    // HTML uses: #4CAF50, #FFC107, #FF9800, #F44336
-    // I will update logic to use these specific colors.
-
     val colors = listOf(
         Color(0xFF4CAF50),
         Color(0xFFFFC107),
@@ -235,9 +230,9 @@ fun AgingDonutChart(stats: List<AgingData>, modifier: Modifier) {
     )
 
     Box(modifier = modifier, contentAlignment = Alignment.Center) {
-        Canvas(modifier = Modifier.size(180.dp)) { // Size similar to HTML h-48
+        Canvas(modifier = Modifier.size(180.dp)) {
             var startAngle = -90f
-            val strokeWidth = 40.dp.toPx() // thicker
+            val strokeWidth = 40.dp.toPx()
 
             stats.forEachIndexed { index, stat ->
                 val sweepAngle = ((stat.amount / total) * 360).toFloat()
@@ -251,7 +246,6 @@ fun AgingDonutChart(stats: List<AgingData>, modifier: Modifier) {
                 startAngle += sweepAngle
             }
         }
-        // Cutout center text? HTML doesn't seem to have text inside aging chart, only legend below.
     }
 }
 
@@ -274,7 +268,7 @@ fun TopDebtorsHorizontalChart(debtors: List<DebtorData>, currencyFormatter: Numb
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(12.dp) // Thicker bars
+                        .height(12.dp)
                         .background(BackgroundColor, RoundedCornerShape(4.dp))
                 ) {
                     Box(

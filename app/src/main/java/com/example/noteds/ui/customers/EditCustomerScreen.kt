@@ -18,6 +18,7 @@ import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -28,6 +29,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import com.example.noteds.data.entity.CustomerEntity
 import com.example.noteds.ui.theme.*
 import kotlinx.coroutines.launch
 
@@ -50,20 +52,32 @@ fun EditCustomerScreen(
     var name by remember { mutableStateOf(customer.name) }
     var phone by remember { mutableStateOf(customer.phone) }
     var note by remember { mutableStateOf(customer.note) }
-    var profilePhotoUri by remember { mutableStateOf(customer.profilePhotoUri) }
-    var passportPhotoUri by remember { mutableStateOf(customer.passportPhotoUri) }
+
+    // Load initial URIs
+    val profilePhotoUris = remember { mutableStateListOf(customer.profilePhotoUri, customer.profilePhotoUri2, customer.profilePhotoUri3) }
+    val passportPhotoUris = remember { mutableStateListOf(customer.passportPhotoUri, customer.passportPhotoUri2, customer.passportPhotoUri3) }
+
     var showDeleteConfirm by remember { mutableStateOf(false) }
 
-    val profilePhotoLauncher = rememberLauncherForActivityResult(
+    var currentPhotoType by remember { mutableStateOf<String?>(null) }
+    var currentPhotoIndex by remember { mutableIntStateOf(-1) }
+
+    val photoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri ->
-        uri?.let { profilePhotoUri = it.toString() }
+        uri?.let {
+            if (currentPhotoType == "PROFILE" && currentPhotoIndex in 0..2) {
+                profilePhotoUris[currentPhotoIndex] = it.toString()
+            } else if (currentPhotoType == "PASSPORT" && currentPhotoIndex in 0..2) {
+                passportPhotoUris[currentPhotoIndex] = it.toString()
+            }
+        }
     }
 
-    val passportPhotoLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri ->
-        uri?.let { passportPhotoUri = it.toString() }
+    fun launchPhotoPicker(type: String, index: Int) {
+        currentPhotoType = type
+        currentPhotoIndex = index
+        photoPickerLauncher.launch("image/*")
     }
 
     Scaffold(
@@ -86,8 +100,12 @@ fun EditCustomerScreen(
                             name = name,
                             phone = phone,
                             note = note,
-                            profilePhotoUri = profilePhotoUri,
-                            passportPhotoUri = passportPhotoUri
+                            profilePhotoUri = profilePhotoUris[0],
+                            profilePhotoUri2 = profilePhotoUris[1],
+                            profilePhotoUri3 = profilePhotoUris[2],
+                            passportPhotoUri = passportPhotoUris[0],
+                            passportPhotoUri2 = passportPhotoUris[1],
+                            passportPhotoUri3 = passportPhotoUris[2]
                         )
                         customerViewModel.updateCustomer(updatedCustomer)
                         onSaved()
@@ -113,38 +131,17 @@ fun EditCustomerScreen(
                 .padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(24.dp)
         ) {
-            // Profile Photo
-            Box(
-                modifier = Modifier.fillMaxWidth(),
-                contentAlignment = Alignment.Center
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(100.dp)
-                        .clip(CircleShape)
-                        .background(if (profilePhotoUri != null) CardSurface else BackgroundColor)
-                        .border(2.dp, if (profilePhotoUri != null) MidnightBlue else Color.LightGray, CircleShape)
-                        .clickable { profilePhotoLauncher.launch("image/*") },
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (profilePhotoUri != null) {
-                         // Assuming AsyncImage would be here
-                         Text("Photo", color = MidnightBlue, fontWeight = FontWeight.Bold)
-                    } else {
-                        Icon(Icons.Default.CameraAlt, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(32.dp))
-                    }
-                }
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .offset(x = 36.dp, y = (-4).dp)
-                        .size(24.dp)
-                        .clip(CircleShape)
-                        .background(VibrantOrange)
-                        .border(2.dp, CardSurface, CircleShape),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(Icons.Default.Add, contentDescription = null, tint = TextWhite, modifier = Modifier.size(16.dp))
+            // Profile Photos (3 Slots)
+            Text("頭像照片 (最多3張)", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = TextSecondary)
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                for (i in 0..2) {
+                    PhotoSlot(
+                        uri = profilePhotoUris[i],
+                        onClick = { launchPhotoPicker("PROFILE", i) },
+                        modifier = Modifier.size(80.dp),
+                        shape = CircleShape,
+                        placeholderIcon = Icons.Default.Person
+                    )
                 }
             }
 
@@ -164,7 +161,6 @@ fun EditCustomerScreen(
                         focusedBorderColor = MidnightBlue,
                         unfocusedBorderColor = Color.Transparent
                     ),
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
                     textStyle = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold, color = MidnightBlue)
                 )
                 OutlinedTextField(
@@ -184,29 +180,17 @@ fun EditCustomerScreen(
                 )
             }
 
-            // Passport Photo
-            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                Text("證件資料", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = TextSecondary)
-
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(100.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(CardSurface)
-                        .border(2.dp, if (passportPhotoUri != null) MidnightBlue.copy(alpha = 0.1f) else Color.LightGray, RoundedCornerShape(12.dp))
-                        .clickable { passportPhotoLauncher.launch("image/*") },
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (passportPhotoUri != null) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.CheckCircle, contentDescription = null, tint = MidnightBlue)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("已選取護照/IC照片", color = MidnightBlue, fontWeight = FontWeight.Bold)
-                        }
-                    } else {
-                         Text("點擊上傳護照 / IC 照片", color = TextSecondary, style = MaterialTheme.typography.bodySmall)
-                    }
+            // Passport Photos (3 Slots)
+            Text("證件資料 (最多3張)", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = TextSecondary)
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                for (i in 0..2) {
+                    PhotoSlot(
+                        uri = passportPhotoUris[i],
+                        onClick = { launchPhotoPicker("PASSPORT", i) },
+                        modifier = Modifier.size(80.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        placeholderIcon = Icons.Default.CameraAlt
+                    )
                 }
             }
 

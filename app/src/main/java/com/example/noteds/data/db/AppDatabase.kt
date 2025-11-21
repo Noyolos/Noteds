@@ -9,7 +9,7 @@ import com.example.noteds.data.entity.LedgerEntryEntity
 
 @Database(
     entities = [CustomerEntity::class, LedgerEntryEntity::class],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {

@@ -64,7 +64,7 @@ class ReportsViewModel(
         .map { list ->
             list.filter { it.amount > 0.0 }
                 .sortedByDescending { it.amount }
-                .take(10) // Top 10 as requested
+                .take(10)
         }
         .stateIn(
             scope = viewModelScope,
@@ -96,7 +96,6 @@ class ReportsViewModel(
             initialValue = 0.0
         )
 
-    // Monthly Comparison (Last 6 Months)
     val last6MonthsStats: StateFlow<List<MonthlyStats>> = ledgerRepository.getAllEntries()
         .map { entries ->
             calculateLast6Months(entries)
@@ -107,7 +106,6 @@ class ReportsViewModel(
             initialValue = emptyList()
         )
 
-    // Aging Distribution (FIFO logic)
     val agingStats: StateFlow<List<AgingData>> = ledgerRepository.getAllEntries()
         .map { entries ->
             calculateAging(entries)
@@ -126,7 +124,6 @@ class ReportsViewModel(
             initialValue = 0
         )
 
-    // Real Trend Data (Last 6 Months Total Outstanding Debt)
     val totalDebtTrend: StateFlow<List<Float>> = ledgerRepository.getAllEntries()
         .map { entries ->
             calculateDebtTrend(entries)
@@ -137,12 +134,31 @@ class ReportsViewModel(
             initialValue = emptyList()
         )
 
+    // Average Collection Period (DSO)
+    // Formula: (Average Accounts Receivable / Total Credit Sales) * Days in Period
+    // Simplified: (Current Total Debt / Debt Sales in Last 30 Days) * 30
+    val averageCollectionPeriod: StateFlow<Int> = combine(totalDebt, ledgerRepository.getAllEntries()) { currentDebt, entries ->
+        val thirtyDaysAgo = System.currentTimeMillis() - (30L * 24 * 60 * 60 * 1000)
+        val debtSalesLast30Days = entries
+            .filter { it.timestamp >= thirtyDaysAgo && it.type.uppercase() == "DEBT" }
+            .sumOf { it.amount }
+
+        if (debtSalesLast30Days > 0) {
+            ((currentDebt / debtSalesLast30Days) * 30).toInt()
+        } else {
+            0 // Avoid division by zero, means no sales recently so undefined or effectively infinity/0
+        }
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5_000),
+        initialValue = 0
+    )
+
     private fun calculateLast6Months(entries: List<LedgerEntryEntity>): List<MonthlyStats> {
         val calendar = Calendar.getInstance()
         val stats = mutableListOf<MonthlyStats>()
 
         for (i in 0..5) {
-            // Start/End of this month
             val calStart = calendar.clone() as Calendar
             calStart.set(Calendar.DAY_OF_MONTH, 1)
             calStart.set(Calendar.HOUR_OF_DAY, 0)
@@ -163,7 +179,7 @@ class ReportsViewModel(
             val payment = monthEntries.filter { it.type.uppercase() == "PAYMENT" }.sumOf { it.amount }
 
             val monthName = String.format(java.util.Locale.US, "%tb", calStart)
-            stats.add(0, MonthlyStats(monthName, debt, payment)) // Add to front to have chronological order
+            stats.add(0, MonthlyStats(monthName, debt, payment))
 
             calendar.add(Calendar.MONTH, -1)
         }
@@ -171,11 +187,7 @@ class ReportsViewModel(
     }
 
     private fun calculateAging(entries: List<LedgerEntryEntity>): List<AgingData> {
-        // FIFO Logic
-        // 1. Get Total Payments
         var totalPayments = entries.filter { it.type.uppercase() == "PAYMENT" }.sumOf { it.amount }
-
-        // 2. Get Debts sorted by oldest first
         val debts = entries.filter { it.type.uppercase() == "DEBT" }.sortedBy { it.timestamp }
 
         val now = System.currentTimeMillis()
@@ -188,14 +200,11 @@ class ReportsViewModel(
 
         for (debt in debts) {
             if (totalPayments >= debt.amount) {
-                // Fully paid
                 totalPayments -= debt.amount
             } else {
-                // Partially paid or unpaid
                 val remainingDebt = debt.amount - totalPayments
                 totalPayments = 0.0
 
-                // Bucket the remaining debt based on age
                 val age = (now - debt.timestamp) / day
                 when {
                     age <= 30 -> bucket0to30 += remainingDebt
@@ -207,23 +216,21 @@ class ReportsViewModel(
         }
 
         return listOf(
-            AgingData("0-30 Days", bucket0to30, 0xFF00C853), // Green
-            AgingData("31-60 Days", bucket31to60, 0xFFFFAB00), // Yellow
-            AgingData("61-90 Days", bucket61to90, 0xFFFF6D00), // Orange
-            AgingData("90+ Days", bucket90plus, 0xFFD50000)   // Red
+            AgingData("0-30 Days", bucket0to30, 0xFF00C853),
+            AgingData("31-60 Days", bucket31to60, 0xFFFFAB00),
+            AgingData("61-90 Days", bucket61to90, 0xFFFF6D00),
+            AgingData("90+ Days", bucket90plus, 0xFFD50000)
         )
     }
 
     private fun calculateDebtTrend(entries: List<LedgerEntryEntity>): List<Float> {
         val calendar = Calendar.getInstance()
-        // Go to end of current month
         calendar.set(Calendar.DAY_OF_MONTH, 1)
         calendar.add(Calendar.MONTH, 1)
-        calendar.add(Calendar.MILLISECOND, -1) // End of current month
+        calendar.add(Calendar.MILLISECOND, -1)
 
         val points = mutableListOf<Double>()
 
-        // Calculate for last 6 months (including current)
         for (i in 0..5) {
             val endTime = calendar.timeInMillis
 
@@ -231,28 +238,18 @@ class ReportsViewModel(
             val paymentsUntilNow = entries.filter { it.timestamp <= endTime && it.type.uppercase() == "PAYMENT" }.sumOf { it.amount }
             val outstanding = (debtsUntilNow - paymentsUntilNow).coerceAtLeast(0.0)
 
-            points.add(0, outstanding) // Add to front (oldest first)
-
-            // Move to previous month
+            points.add(0, outstanding)
             calendar.add(Calendar.MONTH, -1)
         }
 
-        // Normalize to 0.0 - 1.0
         val maxVal = points.maxOrNull() ?: 1.0
         val minVal = points.minOrNull() ?: 0.0
         val range = if (maxVal == minVal) 1.0 else maxVal - minVal
 
-        // If all are zero, return straight line 0.5
         if (maxVal == 0.0) return listOf(0f, 0f, 0f, 0f, 0f, 0f)
 
         return points.map {
-             // Normalize relative to max to fill chart, but keep 0 at bottom if relevant?
-             // Usually trend line fits min-max.
-             // Let's normalize between min and max.
-             // If we want 0 to be bottom, normalize value / maxVal.
              ((it - minVal) / range).toFloat()
-             // Or simple ratio if we want absolute scale?
-             // Design usually prefers relative shape.
         }
     }
 

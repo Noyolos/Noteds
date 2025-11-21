@@ -10,7 +10,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -39,9 +38,6 @@ fun TransactionFormScreen(
     var amount by remember { mutableStateOf("") }
     var note by remember { mutableStateOf("") }
     var paymentMethod by remember { mutableStateOf("CASH") } // CASH, TNG, BANK_TRANSFER
-
-    var smartInput by remember { mutableStateOf("") }
-    var isParsing by remember { mutableStateOf(false) }
 
     // Date Picker State
     var showDatePicker by remember { mutableStateOf(false) }
@@ -129,48 +125,6 @@ fun TransactionFormScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // AI Smart Input
-            Column(modifier = Modifier.fillMaxWidth()) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Star, contentDescription = null, tint = VibrantOrange, modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("AI 智慧輸入", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = VibrantOrange)
-                }
-                Spacer(modifier = Modifier.height(8.dp))
-                Row(modifier = Modifier.fillMaxWidth()) {
-                    OutlinedTextField(
-                        value = smartInput,
-                        onValueChange = { smartInput = it },
-                        placeholder = { Text("試試輸入：三包米 45塊", style = MaterialTheme.typography.bodySmall, color = TextSecondary.copy(alpha = 0.5f)) },
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = VibrantOrange,
-                            unfocusedBorderColor = VibrantOrange.copy(alpha = 0.2f),
-                            focusedContainerColor = VibrantOrange.copy(alpha = 0.05f),
-                            unfocusedContainerColor = VibrantOrange.copy(alpha = 0.05f)
-                        ),
-                        textStyle = MaterialTheme.typography.bodySmall
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Button(
-                        onClick = {
-                            isParsing = true
-                            // Mock parsing logic
-                            isParsing = false
-                        },
-                        modifier = Modifier.height(56.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = VibrantOrange),
-                        shape = RoundedCornerShape(12.dp),
-                        enabled = smartInput.isNotBlank() && !isParsing
-                    ) {
-                        Text(if(isParsing) "..." else "AI 填單", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
-                    }
-                }
-            }
-
             Spacer(modifier = Modifier.height(32.dp))
 
             // Large Amount Input
@@ -227,7 +181,7 @@ fun TransactionFormScreen(
                 Spacer(modifier = Modifier.height(24.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp) // Changed to 8.dp for tighter spacing
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     PaymentMethodOption(
                         label = "現金",
@@ -303,7 +257,7 @@ fun PaymentMethodOption(
                 text = label,
                 color = if (selected) color else TextSecondary,
                 fontWeight = FontWeight.Bold,
-                fontSize = 12.sp // Smaller text to fit 3 options
+                fontSize = 12.sp
             )
         }
     }
