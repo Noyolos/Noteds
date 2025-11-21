@@ -10,6 +10,9 @@ class CustomerRepository(
 ) {
     fun getAllCustomers(): Flow<List<CustomerEntity>> = customerDao.getAllCustomers()
 
+    suspend fun getAllCustomersSnapshot(): List<CustomerEntity> =
+        customerDao.getAllCustomersSnapshot()
+
     suspend fun insertCustomer(customer: CustomerEntity): Long = customerDao.insertCustomer(customer)
 
     suspend fun updateCustomer(customer: CustomerEntity) = customerDao.updateCustomer(customer)
@@ -17,6 +20,8 @@ class CustomerRepository(
     suspend fun deleteCustomer(customer: CustomerEntity) = customerDao.deleteCustomer(customer)
 
     suspend fun deleteCustomerById(customerId: Long) = customerDao.deleteCustomerById(customerId)
+
+    suspend fun softDeleteCustomerById(customerId: Long) = customerDao.softDeleteCustomerById(customerId)
 
     suspend fun getCustomerById(customerId: Long): CustomerEntity? = customerDao.getCustomerById(customerId)
 

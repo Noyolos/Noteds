@@ -13,8 +13,8 @@ class AppContainer(context: Context) {
         AppDatabase::class.java,
         "noteds-db"
     )
-    .fallbackToDestructiveMigration()
-    .build()
+        .addMigrations(AppDatabase.MIGRATION_4_5)
+        .build()
 
     val customerRepository: CustomerRepository by lazy {
         CustomerRepository(

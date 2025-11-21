@@ -1,18 +1,31 @@
 package com.example.noteds.ui.reports
 
+import android.content.Context
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.noteds.data.entity.CustomerEntity
 import com.example.noteds.data.entity.LedgerEntryEntity
 import com.example.noteds.data.repository.CustomerRepository
 import com.example.noteds.data.repository.LedgerRepository
+import java.io.File
+import java.io.FileOutputStream
+import java.util.Calendar
+import java.util.Locale
+import java.util.zip.ZipEntry
+import java.util.zip.ZipInputStream
+import java.util.zip.ZipOutputStream
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
-import java.util.Calendar
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import org.json.JSONArray
+import org.json.JSONObject
 
 data class DebtorData(
     val id: Long,
@@ -34,7 +47,8 @@ data class AgingData(
 
 class ReportsViewModel(
     private val customerRepository: CustomerRepository,
-    private val ledgerRepository: LedgerRepository
+    private val ledgerRepository: LedgerRepository,
+    private val appContext: Context
 ) : ViewModel() {
 
     private val customersWithBalance: StateFlow<List<DebtorData>> =
@@ -317,4 +331,220 @@ class ReportsViewModel(
                 )
             }
         }
+
+    fun exportBackup(destinationUri: Uri, onResult: (Boolean, String?) -> Unit) {
+        viewModelScope.launch {
+            val (success, message) = withContext(Dispatchers.IO) {
+                try {
+                    val customers = customerRepository.getAllCustomersSnapshot()
+                    val entries = ledgerRepository.getAllEntriesSnapshot()
+                    val backupDir = File(appContext.cacheDir, "backup_temp").apply {
+                        deleteRecursively()
+                        mkdirs()
+                    }
+
+                    val dataJson = buildBackupJson(customers, entries)
+                    val dataFile = File(backupDir, "data.json").apply {
+                        writeText(dataJson)
+                    }
+
+                    appContext.contentResolver.openOutputStream(destinationUri)?.use { outputStream ->
+                        ZipOutputStream(outputStream).use { zipStream ->
+                            zipStream.putNextEntry(ZipEntry("data.json"))
+                            dataFile.inputStream().use { it.copyTo(zipStream) }
+                            zipStream.closeEntry()
+
+                            val photosDir = File(appContext.filesDir, "customer_photos")
+                            if (photosDir.exists()) {
+                                photosDir.listFiles()?.forEach { photo ->
+                                    zipStream.putNextEntry(ZipEntry("customer_photos/${'$'}{photo.name}"))
+                                    photo.inputStream().use { it.copyTo(zipStream) }
+                                    zipStream.closeEntry()
+                                }
+                            }
+                        }
+                    } ?: return@withContext false to "無法建立檔案"
+
+                    true to "備份完成"
+                } catch (e: Exception) {
+                    false to (e.localizedMessage ?: "備份失敗")
+                }
+            }
+            onResult(success, message)
+        }
+    }
+
+    fun importBackup(sourceUri: Uri, onResult: (Boolean, String?) -> Unit) {
+        viewModelScope.launch {
+            val (success, message) = withContext(Dispatchers.IO) {
+                val tempDir = File(appContext.cacheDir, "backup_import").apply {
+                    deleteRecursively()
+                    mkdirs()
+                }
+                try {
+                    unzipToDirectory(sourceUri, tempDir)
+                    val dataFile = File(tempDir, "data.json")
+                    if (!dataFile.exists()) return@withContext false to "找不到資料檔"
+
+                    val (customers, entries) = parseBackupJson(dataFile.readText())
+
+                    val targetPhotoDir = File(appContext.filesDir, "customer_photos").apply { mkdirs() }
+                    val photoSourceDir = File(tempDir, "customer_photos")
+                    if (photoSourceDir.exists()) {
+                        photoSourceDir.listFiles()?.forEach { photo ->
+                            photo.copyTo(File(targetPhotoDir, photo.name), overwrite = true)
+                        }
+                    }
+
+                    customers.forEach { customerRepository.insertCustomer(it) }
+                    entries.forEach { ledgerRepository.insertEntry(it) }
+
+                    true to "導入完成"
+                } catch (e: Exception) {
+                    false to (e.localizedMessage ?: "導入失敗")
+                } finally {
+                    tempDir.deleteRecursively()
+                }
+            }
+            onResult(success, message)
+        }
+    }
+
+    private fun buildBackupJson(
+        customers: List<CustomerEntity>,
+        entries: List<LedgerEntryEntity>
+    ): String {
+        val filesDirPath = appContext.filesDir.absolutePath
+        val customersArray = JSONArray().apply {
+            customers.forEach { customer ->
+                put(
+                    JSONObject().apply {
+                        put("id", customer.id)
+                        put("code", customer.code)
+                        put("name", customer.name)
+                        put("phone", customer.phone)
+                        put("note", customer.note)
+                        put("profilePhotoUri", normalizeUriForBackup(customer.profilePhotoUri, filesDirPath))
+                        put("profilePhotoUri2", normalizeUriForBackup(customer.profilePhotoUri2, filesDirPath))
+                        put("profilePhotoUri3", normalizeUriForBackup(customer.profilePhotoUri3, filesDirPath))
+                        put("idCardPhotoUri", normalizeUriForBackup(customer.idCardPhotoUri, filesDirPath))
+                        put("passportPhotoUri", normalizeUriForBackup(customer.passportPhotoUri, filesDirPath))
+                        put("passportPhotoUri2", normalizeUriForBackup(customer.passportPhotoUri2, filesDirPath))
+                        put("passportPhotoUri3", normalizeUriForBackup(customer.passportPhotoUri3, filesDirPath))
+                        put("expectedRepaymentDate", customer.expectedRepaymentDate)
+                        put("initialTransactionDone", customer.initialTransactionDone)
+                        put("isDeleted", customer.isDeleted)
+                    }
+                )
+            }
+        }
+
+        val entriesArray = JSONArray().apply {
+            entries.forEach { entry ->
+                put(
+                    JSONObject().apply {
+                        put("id", entry.id)
+                        put("customerId", entry.customerId)
+                        put("type", entry.type)
+                        put("amount", entry.amount)
+                        put("timestamp", entry.timestamp)
+                        put("note", entry.note)
+                    }
+                )
+            }
+        }
+
+        return JSONObject().apply {
+            put("customers", customersArray)
+            put("ledgerEntries", entriesArray)
+        }.toString()
+    }
+
+    private fun parseBackupJson(json: String): Pair<List<CustomerEntity>, List<LedgerEntryEntity>> {
+        val root = JSONObject(json)
+        val customersArray = root.optJSONArray("customers") ?: JSONArray()
+        val entriesArray = root.optJSONArray("ledgerEntries") ?: JSONArray()
+        val customers = buildList {
+            for (i in 0 until customersArray.length()) {
+                val obj = customersArray.getJSONObject(i)
+                add(
+                    CustomerEntity(
+                        id = obj.optLong("id"),
+                        code = obj.optString("code", ""),
+                        name = obj.optString("name"),
+                        phone = obj.optString("phone"),
+                        note = obj.optString("note"),
+                        profilePhotoUri = resolveImportedUri(obj.optNullableString("profilePhotoUri")),
+                        profilePhotoUri2 = resolveImportedUri(obj.optNullableString("profilePhotoUri2")),
+                        profilePhotoUri3 = resolveImportedUri(obj.optNullableString("profilePhotoUri3")),
+                        idCardPhotoUri = resolveImportedUri(obj.optNullableString("idCardPhotoUri")),
+                        passportPhotoUri = resolveImportedUri(obj.optNullableString("passportPhotoUri")),
+                        passportPhotoUri2 = resolveImportedUri(obj.optNullableString("passportPhotoUri2")),
+                        passportPhotoUri3 = resolveImportedUri(obj.optNullableString("passportPhotoUri3")),
+                        expectedRepaymentDate = if (obj.isNull("expectedRepaymentDate")) null else obj.optLong("expectedRepaymentDate"),
+                        initialTransactionDone = obj.optBoolean("initialTransactionDone", false),
+                        isDeleted = obj.optBoolean("isDeleted", false)
+                    )
+                )
+            }
+        }
+
+        val entries = buildList {
+            for (i in 0 until entriesArray.length()) {
+                val obj = entriesArray.getJSONObject(i)
+                add(
+                    LedgerEntryEntity(
+                        id = obj.optLong("id"),
+                        customerId = obj.optLong("customerId"),
+                        type = obj.optString("type").uppercase(Locale.US),
+                        amount = obj.optDouble("amount"),
+                        timestamp = obj.optLong("timestamp"),
+                        note = obj.optNullableString("note")
+                    )
+                )
+            }
+        }
+        return customers to entries
+    }
+
+    private fun unzipToDirectory(uri: Uri, targetDir: File) {
+        appContext.contentResolver.openInputStream(uri)?.use { inputStream ->
+            ZipInputStream(inputStream).use { zis ->
+                var entry: ZipEntry? = zis.nextEntry
+                while (entry != null) {
+                    if (entry.name.contains("..")) {
+                        throw IllegalArgumentException("偵測到不安全的檔案路徑")
+                    }
+                    val file = File(targetDir, entry.name)
+                    if (entry.isDirectory) {
+                        file.mkdirs()
+                    } else {
+                        file.parentFile?.mkdirs()
+                        FileOutputStream(file).use { output ->
+                            zis.copyTo(output)
+                        }
+                    }
+                    zis.closeEntry()
+                    entry = zis.nextEntry
+                }
+            }
+        } ?: throw IllegalArgumentException("無法讀取檔案")
+    }
+
+    private fun normalizeUriForBackup(uri: String?, filesDirPath: String): String? {
+        if (uri.isNullOrBlank()) return null
+        return if (uri.startsWith(filesDirPath)) {
+            "customer_photos/${'$'}{File(uri).name}"
+        } else uri
+    }
+
+    private fun resolveImportedUri(value: String?): String? {
+        if (value.isNullOrBlank()) return null
+        return if (value.startsWith("customer_photos/")) {
+            File(appContext.filesDir, value).absolutePath
+        } else value
+    }
+
+    private fun JSONObject.optNullableString(name: String): String? =
+        if (isNull(name)) null else optString(name, null)
 }

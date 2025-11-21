@@ -31,7 +31,7 @@ fun CustomerRow(
     item: CustomerWithBalance,
     modifier: Modifier = Modifier,
     onClick: () -> Unit = {}
-) {
+    ) {
     ModernCard(
         modifier = modifier.fillMaxWidth(),
         onClick = onClick
@@ -69,12 +69,24 @@ fun CustomerRow(
 
             val currencyFormatter = remember { NumberFormat.getCurrencyInstance(Locale.getDefault()) }
             val formattedBalance = remember(item.balance) {
-                currencyFormatter.format(item.balance)
+                currencyFormatter.format(kotlin.math.abs(item.balance))
+            }
+            val balanceText = remember(item.balance, formattedBalance) {
+                when {
+                    item.balance > 0 -> "欠 $formattedBalance"
+                    item.balance < 0 -> "預存 $formattedBalance"
+                    else -> "已結清"
+                }
+            }
+            val balanceColor = when {
+                item.balance > 0 -> MaterialTheme.colorScheme.error
+                item.balance < 0 -> MaterialTheme.colorScheme.primary
+                else -> MaterialTheme.colorScheme.onSurfaceVariant
             }
             Text(
-                text = formattedBalance,
+                text = balanceText,
                 style = MaterialTheme.typography.titleMedium,
-                color = if (item.balance >= 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+                color = balanceColor
             )
         }
     }
