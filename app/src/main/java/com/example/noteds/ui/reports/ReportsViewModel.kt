@@ -30,7 +30,8 @@ import org.json.JSONObject
 data class DebtorData(
     val id: Long,
     val name: String,
-    val amount: Double
+    val amount: Double,
+    val photoUri: String? = null // 新增字段：头像路径
 )
 
 data class MonthlyStats(
@@ -280,13 +281,13 @@ class ReportsViewModel(
         if (maxVal == 0.0) return listOf(0f, 0f, 0f, 0f, 0f, 0f)
 
         return points.map {
-             // Normalize relative to max to fill chart, but keep 0 at bottom if relevant?
-             // Usually trend line fits min-max.
-             // Let's normalize between min and max.
-             // If we want 0 to be bottom, normalize value / maxVal.
-             ((it - minVal) / range).toFloat()
-             // Or simple ratio if we want absolute scale?
-             // Design usually prefers relative shape.
+            // Normalize relative to max to fill chart, but keep 0 at bottom if relevant?
+            // Usually trend line fits min-max.
+            // Let's normalize between min and max.
+            // If we want 0 to be bottom, normalize value / maxVal.
+            ((it - minVal) / range).toFloat()
+            // Or simple ratio if we want absolute scale?
+            // Design usually prefers relative shape.
         }
     }
 
@@ -327,7 +328,8 @@ class ReportsViewModel(
                 DebtorData(
                     id = customer.id,
                     name = customer.name,
-                    amount = balanceByCustomer[customer.id] ?: 0.0
+                    amount = balanceByCustomer[customer.id] ?: 0.0,
+                    photoUri = customer.profilePhotoUri // <--- 映射头像路径
                 )
             }
         }

@@ -27,9 +27,11 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
 import com.example.noteds.ui.reports.DebtorData
 import com.example.noteds.ui.reports.ReportsViewModel
 import com.example.noteds.ui.theme.*
@@ -258,10 +260,6 @@ fun TrendLineChart(
         val stepX = width / (points.size - 1)
 
         points.forEachIndexed { index, ratio ->
-            // Ensure ratio is used correctly.
-            // 1.0 means max debt -> top of chart? Or bottom?
-            // Usually chart 0 is bottom.
-            // y = height - (height * ratio)
             val x = index * stepX
             val y = height - (height * ratio) // Invert for display (0 at bottom)
 
@@ -315,7 +313,7 @@ fun StatCard(
         Column(
             modifier = Modifier
                 .padding(16.dp)
-                .height(80.dp), // Fixed height ~28 in HTML logic (h-28 = 7rem = 112px?), adjusted visually
+                .height(80.dp), // Fixed height
             verticalArrangement = Arrangement.SpaceBetween
         ) {
             Box(
@@ -371,6 +369,7 @@ fun TopDebtorItem(
                 .fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            // 头像或首字母容器
             Box(
                 modifier = Modifier
                     .size(48.dp)
@@ -379,12 +378,23 @@ fun TopDebtorItem(
                     .border(1.dp, Color(0xFFEEEEEE), RoundedCornerShape(12.dp)),
                 contentAlignment = Alignment.Center
             ) {
-                Text(
-                    text = debtor.name.take(1).uppercase(),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MidnightBlue
-                )
+                if (!debtor.photoUri.isNullOrBlank()) {
+                    // 显示头像
+                    AsyncImage(
+                        model = debtor.photoUri,
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+                } else {
+                    // 显示首字母
+                    Text(
+                        text = debtor.name.take(1).uppercase(),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MidnightBlue
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.width(16.dp))
@@ -394,7 +404,8 @@ fun TopDebtorItem(
                     text = debtor.name,
                     style = MaterialTheme.typography.bodyLarge,
                     fontWeight = FontWeight.Bold,
-                    color = MidnightBlue
+                    color = MidnightBlue,
+                    maxLines = 1
                 )
                 Text(
                     text = "ID: ...${debtor.id.toString().takeLast(4).padStart(4, '0')}",

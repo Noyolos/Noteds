@@ -1,3 +1,8 @@
+@file:OptIn(
+    androidx.compose.material3.ExperimentalMaterial3Api::class,
+    androidx.compose.foundation.ExperimentalFoundationApi::class
+)
+
 package com.example.noteds.ui.customers
 
 import android.widget.Toast
@@ -42,7 +47,6 @@ import java.util.Date
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CustomerDetailScreen(
     customerId: Long,
@@ -60,8 +64,8 @@ fun CustomerDetailScreen(
 
     var showTransactionForm by remember { mutableStateOf<String?>(null) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
-    var entryForEdit by remember { mutableStateOf<com.example.noteds.data.entity.LedgerEntryEntity?>(null) }
-    var entryPendingDelete by remember { mutableStateOf<com.example.noteds.data.entity.LedgerEntryEntity?>(null) }
+    var entryForEdit by remember { mutableStateOf<LedgerEntryEntity?>(null) }
+    var entryPendingDelete by remember { mutableStateOf<LedgerEntryEntity?>(null) }
     var fullScreenPhoto by remember { mutableStateOf<String?>(null) }
     val context = LocalContext.current
 
@@ -115,8 +119,7 @@ fun CustomerDetailScreen(
         Scaffold(
             topBar = {
                 TopAppBar(
-                    title = { Text("客戶詳情", color = TextPrimary, fontWeight = FontWeight.Bold) }, // HTML style: dark text on white? No, previous code had dark bg. HTML has white header.
-                    // HTML Detail Screen Header is WHITE with dark text.
+                    title = { Text("客戶詳情", color = TextPrimary, fontWeight = FontWeight.Bold) },
                     navigationIcon = {
                         IconButton(onClick = onClose) {
                             Icon(Icons.Default.ArrowBack, contentDescription = null, tint = TextPrimary)
@@ -127,16 +130,15 @@ fun CustomerDetailScreen(
                             Icon(Icons.Default.Edit, contentDescription = "Edit", tint = TextPrimary)
                         }
                     },
-                    colors = TopAppBarDefaults.topAppBarColors(containerColor = CardSurface) // White header
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = CardSurface)
                 )
             },
             bottomBar = {
-                // Bottom Action Bar matching HTML style
                 Column(
                     modifier = Modifier
                         .background(CardSurface)
                         .navigationBarsPadding()
-                        .shadow(elevation = 10.dp) // Shadow float
+                        .shadow(elevation = 10.dp)
                 ) {
                     Row(
                         modifier = Modifier
@@ -164,7 +166,7 @@ fun CustomerDetailScreen(
                             colors = ButtonDefaults.buttonColors(containerColor = PaymentColor),
                             shape = RoundedCornerShape(16.dp)
                         ) {
-                            Icon(Icons.Default.ArrowBack, contentDescription = null, modifier = Modifier.size(20.dp)) // Use arrow down/back for payment
+                            Icon(Icons.Default.ArrowBack, contentDescription = null, modifier = Modifier.size(20.dp))
                             Spacer(modifier = Modifier.width(8.dp))
                             Text("收回款", fontWeight = FontWeight.Bold)
                         }
@@ -224,7 +226,7 @@ fun CustomerDetailScreen(
                         )
                         if (selected.customer.code.isNotBlank()) {
                             Text(
-                                text = "編號: ${'$'}{selected.customer.code}",
+                                text = "編號: ${selected.customer.code}",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = TextSecondary,
                                 fontWeight = FontWeight.Medium
@@ -252,7 +254,7 @@ fun CustomerDetailScreen(
                             modifier = Modifier
                                 .background(
                                     Brush.linearGradient(
-                                        colors = listOf(MidnightBlue, Color(0xFF534BAE)) // brand-blue to brand-light
+                                        colors = listOf(MidnightBlue, Color(0xFF534BAE))
                                     )
                                 )
                                 .padding(24.dp)
@@ -450,7 +452,7 @@ fun TransactionItem(
             ),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = CardSurface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp) // shadow-soft
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Row(
             modifier = Modifier
@@ -466,7 +468,7 @@ fun TransactionItem(
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    imageVector = if (isDebt) Icons.Default.Add else Icons.Default.ArrowBack, // TrendingUp/Down substitute
+                    imageVector = if (isDebt) Icons.Default.Add else Icons.Default.ArrowBack,
                     contentDescription = null,
                     tint = if (isDebt) DebtColor else PaymentColor,
                     modifier = Modifier.size(18.dp)
