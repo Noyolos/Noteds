@@ -20,6 +20,7 @@ import java.util.UUID
 import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
 import java.util.zip.ZipOutputStream
+import kotlin.io.buffered
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
@@ -366,24 +367,27 @@ class ReportsViewModel(
     fun exportBackup(destinationUri: Uri, onResult: (Boolean, String?) -> Unit) {
         viewModelScope.launch {
             val (success, message) = withContext(Dispatchers.IO) {
+                val backupDir = File(appContext.cacheDir, "backup_temp").apply {
+                    deleteRecursively()
+                    mkdirs()
+                }
+                val photosDir = File(backupDir, "photos").apply { mkdirs() }
+
                 try {
                     val customers = customerRepository.getAllCustomersSnapshot()
                     val entries = ledgerRepository.getAllEntriesSnapshot()
-                    val backupDir = File(appContext.cacheDir, "backup_temp").apply {
-                        deleteRecursively()
-                        mkdirs()
-                    }
-
-                    val photosDir = File(backupDir, "photos").apply { mkdirs() }
                     val dataJson = buildBackupJson(customers, entries, photosDir)
-                    val dataFile = File(backupDir, "data.json").apply {
-                        writeText(dataJson)
-                    }
+                    val dataBytes = dataJson.toByteArray(Charsets.UTF_8)
 
-                    appContext.contentResolver.openOutputStream(destinationUri)?.use { outputStream ->
-                        ZipOutputStream(outputStream).use { zipStream ->
+                    Log.d(
+                        "ReportsViewModel",
+                        "Preparing backup: customers=${customers.size}, entries=${entries.size}, jsonBytes=${dataBytes.size}"
+                    )
+
+                    val writeResult = appContext.contentResolver.openOutputStream(destinationUri, "w")?.use { rawStream ->
+                        ZipOutputStream(rawStream.buffered()).use { zipStream ->
                             zipStream.putNextEntry(ZipEntry("data.json"))
-                            dataFile.inputStream().use { it.copyTo(zipStream) }
+                            zipStream.write(dataBytes)
                             zipStream.closeEntry()
 
                             photosDir.walkTopDown()
@@ -394,12 +398,22 @@ class ReportsViewModel(
                                     photo.inputStream().use { it.copyTo(zipStream) }
                                     zipStream.closeEntry()
                                 }
+
+                            zipStream.finish()
                         }
-                    } ?: return@withContext false to "無法建立檔案"
+                        true
+                    } ?: false
+
+                    if (!writeResult) {
+                        return@withContext false to "無法建立檔案"
+                    }
 
                     true to "備份完成"
                 } catch (e: Exception) {
+                    Log.e("ReportsViewModel", "Failed to export backup", e)
                     false to (e.localizedMessage ?: "備份失敗")
+                } finally {
+                    backupDir.deleteRecursively()
                 }
             }
             onResult(success, message)

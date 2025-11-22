@@ -7,6 +7,7 @@
 - Create at least five customers, each with a real photo, export a backup, delete those customers (and photos), then import the backup; verify the import succeeds without JSON parsing errors such as "End of input at character 0" and that every customer, ledger entry, and photo is restored (individual corrupted photos may import with `null` paths while the rest succeed).
 - Import an old-format (JSON-only) backup; confirm customer and ledger data restore while photo paths remain `null` without errors.
 - Simulate a corrupted photo payload (e.g., edit `photoBase64` to an invalid string) and import; confirm the import completes, the affected photo path is `null`, and other data remains intact.
+- Import a deliberately corrupted/empty backup file (e.g., random text or 0-byte payload); expect a clear "backup empty or corrupted" style error and no crash or partial data changes.
 - Soft-delete a customer with a photo, export a new backup, and confirm the deleted customer and photo file are absent from the archive and stay missing after import.
 
 ## Navigation
