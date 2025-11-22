@@ -10,8 +10,9 @@
   - Test upgrades from the lowest supported version to the newest before releasing.
 
 ## Backup export/import
-- **Export:** collects active (non-deleted) customers and their ledger entries, writing them into a zip payload in cache.
-- **Import mode:** **cover/replace**. All existing customers and ledger entries are cleared and replaced inside a single Room transaction. Soft-deleted customers and orphaned ledger rows are filtered out to avoid resurrecting removed data.
+- **Export format (v2):** `noteds-backup-<timestamp>.zip` containing `data.json` and a `photos/` directory. `data.json` carries `backupVersion = 2`, customers, and ledger entries; each photo field stores `photos/<fileName>` only when the referenced file exists. Photos are copied from the app's `customer_photos` directory into `photos/` with deterministic names per customer/slot.
+- **Legacy compatibility:** older backups without `backupVersion` are treated as v1 and import only database rows. Missing photos never break import.
+- **Import mode:** **cover/replace**. All existing customers and ledger entries are cleared and replaced inside a single Room transaction. Soft-deleted customers and orphaned ledger rows are filtered out to avoid resurrecting removed data. For v2 backups, the on-device `customer_photos` directory is cleared before restoring photo files; any individual photo copy failure is logged and results in a `null` path for that field instead of aborting the import.
 - **Failure behavior:** any error during import rolls back the transaction; pre-import data remains untouched. Surface user-friendly error messages at the UI layer.
 
 ## Soft delete rules

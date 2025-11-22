@@ -2,6 +2,7 @@ package com.example.noteds.ui.reports
 
 import android.content.Context
 import android.net.Uri
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.noteds.data.entity.CustomerEntity
@@ -14,6 +15,7 @@ import java.io.File
 import java.io.FileOutputStream
 import java.util.Calendar
 import java.util.Locale
+import java.util.UUID
 import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
 import java.util.zip.ZipOutputStream
@@ -371,7 +373,8 @@ class ReportsViewModel(
                         mkdirs()
                     }
 
-                    val dataJson = buildBackupJson(customers, entries)
+                    val photosDir = File(backupDir, "photos").apply { mkdirs() }
+                    val dataJson = buildBackupJson(customers, entries, photosDir)
                     val dataFile = File(backupDir, "data.json").apply {
                         writeText(dataJson)
                     }
@@ -382,14 +385,14 @@ class ReportsViewModel(
                             dataFile.inputStream().use { it.copyTo(zipStream) }
                             zipStream.closeEntry()
 
-                            val photosDir = File(appContext.filesDir, "customer_photos")
-                            if (photosDir.exists()) {
-                                photosDir.listFiles()?.forEach { photo ->
-                                    zipStream.putNextEntry(ZipEntry("customer_photos/${'$'}{photo.name}"))
+                            photosDir.walkTopDown()
+                                .filter { it.isFile }
+                                .forEach { photo ->
+                                    val relativePath = photo.relativeTo(backupDir).invariantSeparatorsPath
+                                    zipStream.putNextEntry(ZipEntry(relativePath))
                                     photo.inputStream().use { it.copyTo(zipStream) }
                                     zipStream.closeEntry()
                                 }
-                            }
                         }
                     } ?: return@withContext false to "無法建立檔案"
 
@@ -410,21 +413,30 @@ class ReportsViewModel(
                     mkdirs()
                 }
                 try {
-                    unzipToDirectory(sourceUri, tempDir)
-                    val dataFile = File(tempDir, "data.json")
-                    if (!dataFile.exists()) return@withContext false to "找不到資料檔"
-
-                    val (customers, entries) = parseBackupJson(dataFile.readText())
-
-                    val targetPhotoDir = File(appContext.filesDir, "customer_photos").apply { mkdirs() }
-                    val photoSourceDir = File(tempDir, "customer_photos")
-                    if (photoSourceDir.exists()) {
-                        photoSourceDir.listFiles()?.forEach { photo ->
-                            photo.copyTo(File(targetPhotoDir, photo.name), overwrite = true)
+                    val isZip = isZipFile(sourceUri)
+                    val dataFile = if (isZip) {
+                        unzipToDirectory(sourceUri, tempDir)
+                        File(tempDir, "data.json")
+                    } else {
+                        File(tempDir, "data.json").apply {
+                            appContext.contentResolver.openInputStream(sourceUri)?.use { input ->
+                                outputStream().use { input.copyTo(it) }
+                            } ?: throw IllegalArgumentException("無法讀取檔案")
                         }
                     }
+                    if (!dataFile.exists()) return@withContext false to "找不到資料檔"
 
-                    backupRepository.replaceAllData(customers, entries)
+                    val jsonText = dataFile.readText()
+                    val previewVersion = runCatching { JSONObject(jsonText).optInt("backupVersion", 1) }
+                        .getOrDefault(1)
+
+                    if (previewVersion >= 2) {
+                        clearCustomerPhotoDirectory()
+                    }
+
+                    val parsed = parseBackupJson(jsonText, tempDir.takeIf { isZip })
+
+                    backupRepository.replaceAllData(parsed.customers, parsed.entries)
 
                     true to "導入完成"
                 } catch (e: Exception) {
@@ -440,9 +452,9 @@ class ReportsViewModel(
 
     private fun buildBackupJson(
         customers: List<CustomerEntity>,
-        entries: List<LedgerEntryEntity>
+        entries: List<LedgerEntryEntity>,
+        photosDir: File
     ): String {
-        val filesDirPath = appContext.filesDir.absolutePath
         val customersArray = JSONArray().apply {
             customers.forEach { customer ->
                 put(
@@ -452,13 +464,13 @@ class ReportsViewModel(
                         put("name", customer.name)
                         put("phone", customer.phone)
                         put("note", customer.note)
-                        put("profilePhotoUri", normalizeUriForBackup(customer.profilePhotoUri, filesDirPath))
-                        put("profilePhotoUri2", normalizeUriForBackup(customer.profilePhotoUri2, filesDirPath))
-                        put("profilePhotoUri3", normalizeUriForBackup(customer.profilePhotoUri3, filesDirPath))
-                        put("idCardPhotoUri", normalizeUriForBackup(customer.idCardPhotoUri, filesDirPath))
-                        put("passportPhotoUri", normalizeUriForBackup(customer.passportPhotoUri, filesDirPath))
-                        put("passportPhotoUri2", normalizeUriForBackup(customer.passportPhotoUri2, filesDirPath))
-                        put("passportPhotoUri3", normalizeUriForBackup(customer.passportPhotoUri3, filesDirPath))
+                        put("profilePhotoUri", addPhotoToBackup(customer.profilePhotoUri, photosDir, "${'$'}{customer.id}_profile1"))
+                        put("profilePhotoUri2", addPhotoToBackup(customer.profilePhotoUri2, photosDir, "${'$'}{customer.id}_profile2"))
+                        put("profilePhotoUri3", addPhotoToBackup(customer.profilePhotoUri3, photosDir, "${'$'}{customer.id}_profile3"))
+                        put("idCardPhotoUri", addPhotoToBackup(customer.idCardPhotoUri, photosDir, "${'$'}{customer.id}_idcard"))
+                        put("passportPhotoUri", addPhotoToBackup(customer.passportPhotoUri, photosDir, "${'$'}{customer.id}_passport1"))
+                        put("passportPhotoUri2", addPhotoToBackup(customer.passportPhotoUri2, photosDir, "${'$'}{customer.id}_passport2"))
+                        put("passportPhotoUri3", addPhotoToBackup(customer.passportPhotoUri3, photosDir, "${'$'}{customer.id}_passport3"))
                         put("expectedRepaymentDate", customer.expectedRepaymentDate)
                         put("initialTransactionDone", customer.initialTransactionDone)
                         put("isDeleted", customer.isDeleted)
@@ -483,13 +495,15 @@ class ReportsViewModel(
         }
 
         return JSONObject().apply {
+            put("backupVersion", 2)
             put("customers", customersArray)
             put("ledgerEntries", entriesArray)
         }.toString()
     }
 
-    private fun parseBackupJson(json: String): Pair<List<CustomerEntity>, List<LedgerEntryEntity>> {
+    private fun parseBackupJson(json: String, extractedRoot: File?): ParsedBackup {
         val root = JSONObject(json)
+        val backupVersion = root.optInt("backupVersion", 1)
         val customersArray = root.optJSONArray("customers") ?: JSONArray()
         val entriesArray = root.optJSONArray("ledgerEntries") ?: JSONArray()
         val customers = buildList {
@@ -502,13 +516,13 @@ class ReportsViewModel(
                         name = obj.optString("name"),
                         phone = obj.optString("phone"),
                         note = obj.optString("note"),
-                        profilePhotoUri = resolveImportedUri(obj.optNullableString("profilePhotoUri")),
-                        profilePhotoUri2 = resolveImportedUri(obj.optNullableString("profilePhotoUri2")),
-                        profilePhotoUri3 = resolveImportedUri(obj.optNullableString("profilePhotoUri3")),
-                        idCardPhotoUri = resolveImportedUri(obj.optNullableString("idCardPhotoUri")),
-                        passportPhotoUri = resolveImportedUri(obj.optNullableString("passportPhotoUri")),
-                        passportPhotoUri2 = resolveImportedUri(obj.optNullableString("passportPhotoUri2")),
-                        passportPhotoUri3 = resolveImportedUri(obj.optNullableString("passportPhotoUri3")),
+                        profilePhotoUri = resolveImportedUri(obj.optNullableString("profilePhotoUri"), backupVersion, extractedRoot, "profile1"),
+                        profilePhotoUri2 = resolveImportedUri(obj.optNullableString("profilePhotoUri2"), backupVersion, extractedRoot, "profile2"),
+                        profilePhotoUri3 = resolveImportedUri(obj.optNullableString("profilePhotoUri3"), backupVersion, extractedRoot, "profile3"),
+                        idCardPhotoUri = resolveImportedUri(obj.optNullableString("idCardPhotoUri"), backupVersion, extractedRoot, "idcard"),
+                        passportPhotoUri = resolveImportedUri(obj.optNullableString("passportPhotoUri"), backupVersion, extractedRoot, "passport1"),
+                        passportPhotoUri2 = resolveImportedUri(obj.optNullableString("passportPhotoUri2"), backupVersion, extractedRoot, "passport2"),
+                        passportPhotoUri3 = resolveImportedUri(obj.optNullableString("passportPhotoUri3"), backupVersion, extractedRoot, "passport3"),
                         expectedRepaymentDate = if (obj.isNull("expectedRepaymentDate")) null else obj.optLong("expectedRepaymentDate"),
                         initialTransactionDone = obj.optBoolean("initialTransactionDone", false),
                         isDeleted = obj.optBoolean("isDeleted", false)
@@ -532,7 +546,7 @@ class ReportsViewModel(
                 )
             }
         }
-        return customers to entries
+        return ParsedBackup(backupVersion, customers, entries)
     }
 
     private fun unzipToDirectory(uri: Uri, targetDir: File) {
@@ -559,20 +573,85 @@ class ReportsViewModel(
         } ?: throw IllegalArgumentException("無法讀取檔案")
     }
 
-    private fun normalizeUriForBackup(uri: String?, filesDirPath: String): String? {
+    private fun addPhotoToBackup(uri: String?, photosDir: File, fileNamePrefix: String): String? {
         if (uri.isNullOrBlank()) return null
-        return if (uri.startsWith(filesDirPath)) {
-            "customer_photos/${'$'}{File(uri).name}"
-        } else uri
+        val file = File(uri)
+        if (!file.exists()) return null
+        return try {
+            val extension = file.extension.takeIf { it.isNotBlank() } ?: "jpg"
+            val backupName = "${'$'}fileNamePrefix.$extension"
+            val destination = File(photosDir, backupName)
+            file.copyTo(destination, overwrite = true)
+            "photos/${'$'}backupName"
+        } catch (e: Exception) {
+            Log.e("ReportsViewModel", "Failed to copy photo for backup", e)
+            null
+        }
     }
 
-    private fun resolveImportedUri(value: String?): String? {
+    private fun resolveImportedUri(
+        value: String?,
+        backupVersion: Int,
+        extractedRoot: File?,
+        nameHint: String
+    ): String? {
         if (value.isNullOrBlank()) return null
-        return if (value.startsWith("customer_photos/")) {
-            File(appContext.filesDir, value).absolutePath
-        } else value
+        val targetDir = File(appContext.filesDir, "customer_photos").apply { mkdirs() }
+
+        if (backupVersion >= 2 && extractedRoot != null && value.startsWith("photos/")) {
+            val sourceFile = File(extractedRoot, value)
+            if (!sourceFile.exists()) return null
+
+            return try {
+                val extension = sourceFile.extension.takeIf { it.isNotBlank() } ?: "jpg"
+                val targetFile = File(
+                    targetDir,
+                    "${'$'}nameHint_${System.currentTimeMillis()}_${UUID.randomUUID()}.$extension"
+                )
+                sourceFile.copyTo(targetFile, overwrite = true)
+                targetFile.absolutePath
+            } catch (e: Exception) {
+                Log.e("ReportsViewModel", "Failed to restore photo from backup", e)
+                null
+            }
+        }
+
+        if (value.startsWith("customer_photos/")) {
+            return File(targetDir, value.removePrefix("customer_photos/")).absolutePath
+        }
+        return value
+    }
+
+    private fun isZipFile(uri: Uri): Boolean {
+        return try {
+            appContext.contentResolver.openInputStream(uri)?.use { stream ->
+                val header = ByteArray(4)
+                if (stream.read(header) == 4) {
+                    header[0] == 'P'.code.toByte() &&
+                        header[1] == 'K'.code.toByte() &&
+                        header[2] == 3.toByte() &&
+                        header[3] == 4.toByte()
+                } else false
+            } ?: false
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    private fun clearCustomerPhotoDirectory() {
+        val targetPhotoDir = File(appContext.filesDir, "customer_photos")
+        if (targetPhotoDir.exists()) {
+            targetPhotoDir.deleteRecursively()
+        }
+        targetPhotoDir.mkdirs()
     }
 
     private fun JSONObject.optNullableString(name: String): String? =
         if (isNull(name)) null else optString(name, null)
+
+    data class ParsedBackup(
+        val backupVersion: Int,
+        val customers: List<CustomerEntity>,
+        val entries: List<LedgerEntryEntity>
+    )
 }
