@@ -3,8 +3,9 @@
 ## Backup & Restore
 - Export a backup from a dataset with active and soft-deleted customers; confirm soft-deleted records are absent from the archive.
 - Import the backup on top of existing data; verify all records match the backup and no partial data remains if you simulate a failure.
-- Create a customer with a photo, export a v2 backup, delete the customer and the on-device `customer_photos` directory, then import the backup on the same device; confirm both the customer data and photo paths are restored and the image file exists.
+- Create a customer with at least one photo (via the existing capture/pick flow), export a backup, delete the customer and clear the on-device `customer_photos` directory, then import the backup on the same device; confirm both the customer data and all restored photo files exist with valid `photoPath` values.
 - Import an old-format (JSON-only) backup; confirm customer and ledger data restore while photo paths remain `null` without errors.
+- Simulate a corrupted photo payload (e.g., edit `photoBase64` to an invalid string) and import; confirm the import completes, the affected photo path is `null`, and other data remains intact.
 - Soft-delete a customer with a photo, export a new backup, and confirm the deleted customer and photo file are absent from the archive and stay missing after import.
 
 ## Navigation

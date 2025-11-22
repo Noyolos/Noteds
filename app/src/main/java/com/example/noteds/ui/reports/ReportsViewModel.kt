@@ -2,6 +2,7 @@ package com.example.noteds.ui.reports
 
 import android.content.Context
 import android.net.Uri
+import android.util.Base64
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -465,12 +466,19 @@ class ReportsViewModel(
                         put("phone", customer.phone)
                         put("note", customer.note)
                         put("profilePhotoUri", addPhotoToBackup(customer.profilePhotoUri, photosDir, "${'$'}{customer.id}_profile1"))
+                        put("profilePhotoBase64", encodePhotoBase64(customer.profilePhotoUri))
                         put("profilePhotoUri2", addPhotoToBackup(customer.profilePhotoUri2, photosDir, "${'$'}{customer.id}_profile2"))
+                        put("profilePhoto2Base64", encodePhotoBase64(customer.profilePhotoUri2))
                         put("profilePhotoUri3", addPhotoToBackup(customer.profilePhotoUri3, photosDir, "${'$'}{customer.id}_profile3"))
+                        put("profilePhoto3Base64", encodePhotoBase64(customer.profilePhotoUri3))
                         put("idCardPhotoUri", addPhotoToBackup(customer.idCardPhotoUri, photosDir, "${'$'}{customer.id}_idcard"))
+                        put("idCardPhotoBase64", encodePhotoBase64(customer.idCardPhotoUri))
                         put("passportPhotoUri", addPhotoToBackup(customer.passportPhotoUri, photosDir, "${'$'}{customer.id}_passport1"))
+                        put("passportPhotoBase64", encodePhotoBase64(customer.passportPhotoUri))
                         put("passportPhotoUri2", addPhotoToBackup(customer.passportPhotoUri2, photosDir, "${'$'}{customer.id}_passport2"))
+                        put("passportPhoto2Base64", encodePhotoBase64(customer.passportPhotoUri2))
                         put("passportPhotoUri3", addPhotoToBackup(customer.passportPhotoUri3, photosDir, "${'$'}{customer.id}_passport3"))
+                        put("passportPhoto3Base64", encodePhotoBase64(customer.passportPhotoUri3))
                         put("expectedRepaymentDate", customer.expectedRepaymentDate)
                         put("initialTransactionDone", customer.initialTransactionDone)
                         put("isDeleted", customer.isDeleted)
@@ -509,6 +517,13 @@ class ReportsViewModel(
         val customers = buildList {
             for (i in 0 until customersArray.length()) {
                 val obj = customersArray.getJSONObject(i)
+                val profilePhotoBase64 = obj.optNullableString("profilePhotoBase64")
+                val profilePhoto2Base64 = obj.optNullableString("profilePhoto2Base64")
+                val profilePhoto3Base64 = obj.optNullableString("profilePhoto3Base64")
+                val idCardPhotoBase64 = obj.optNullableString("idCardPhotoBase64")
+                val passportPhotoBase64 = obj.optNullableString("passportPhotoBase64")
+                val passportPhoto2Base64 = obj.optNullableString("passportPhoto2Base64")
+                val passportPhoto3Base64 = obj.optNullableString("passportPhoto3Base64")
                 add(
                     CustomerEntity(
                         id = obj.optLong("id"),
@@ -516,13 +531,13 @@ class ReportsViewModel(
                         name = obj.optString("name"),
                         phone = obj.optString("phone"),
                         note = obj.optString("note"),
-                        profilePhotoUri = resolveImportedUri(obj.optNullableString("profilePhotoUri"), backupVersion, extractedRoot, "profile1"),
-                        profilePhotoUri2 = resolveImportedUri(obj.optNullableString("profilePhotoUri2"), backupVersion, extractedRoot, "profile2"),
-                        profilePhotoUri3 = resolveImportedUri(obj.optNullableString("profilePhotoUri3"), backupVersion, extractedRoot, "profile3"),
-                        idCardPhotoUri = resolveImportedUri(obj.optNullableString("idCardPhotoUri"), backupVersion, extractedRoot, "idcard"),
-                        passportPhotoUri = resolveImportedUri(obj.optNullableString("passportPhotoUri"), backupVersion, extractedRoot, "passport1"),
-                        passportPhotoUri2 = resolveImportedUri(obj.optNullableString("passportPhotoUri2"), backupVersion, extractedRoot, "passport2"),
-                        passportPhotoUri3 = resolveImportedUri(obj.optNullableString("passportPhotoUri3"), backupVersion, extractedRoot, "passport3"),
+                        profilePhotoUri = restorePhoto(obj.optNullableString("profilePhotoUri"), profilePhotoBase64, backupVersion, extractedRoot, "profile1"),
+                        profilePhotoUri2 = restorePhoto(obj.optNullableString("profilePhotoUri2"), profilePhoto2Base64, backupVersion, extractedRoot, "profile2"),
+                        profilePhotoUri3 = restorePhoto(obj.optNullableString("profilePhotoUri3"), profilePhoto3Base64, backupVersion, extractedRoot, "profile3"),
+                        idCardPhotoUri = restorePhoto(obj.optNullableString("idCardPhotoUri"), idCardPhotoBase64, backupVersion, extractedRoot, "idcard"),
+                        passportPhotoUri = restorePhoto(obj.optNullableString("passportPhotoUri"), passportPhotoBase64, backupVersion, extractedRoot, "passport1"),
+                        passportPhotoUri2 = restorePhoto(obj.optNullableString("passportPhotoUri2"), passportPhoto2Base64, backupVersion, extractedRoot, "passport2"),
+                        passportPhotoUri3 = restorePhoto(obj.optNullableString("passportPhotoUri3"), passportPhoto3Base64, backupVersion, extractedRoot, "passport3"),
                         expectedRepaymentDate = if (obj.isNull("expectedRepaymentDate")) null else obj.optLong("expectedRepaymentDate"),
                         initialTransactionDone = obj.optBoolean("initialTransactionDone", false),
                         isDeleted = obj.optBoolean("isDeleted", false)
@@ -589,6 +604,18 @@ class ReportsViewModel(
         }
     }
 
+    private fun encodePhotoBase64(uri: String?): String? {
+        if (uri.isNullOrBlank()) return null
+        val file = File(uri)
+        if (!file.exists()) return null
+        return try {
+            Base64.encodeToString(file.readBytes(), Base64.NO_WRAP)
+        } catch (e: Exception) {
+            Log.e("ReportsViewModel", "Failed to encode photo for backup", e)
+            null
+        }
+    }
+
     private fun resolveImportedUri(
         value: String?,
         backupVersion: Int,
@@ -620,6 +647,39 @@ class ReportsViewModel(
             return File(targetDir, value.removePrefix("customer_photos/")).absolutePath
         }
         return value
+    }
+
+    private fun restorePhoto(
+        uriValue: String?,
+        base64Value: String?,
+        backupVersion: Int,
+        extractedRoot: File?,
+        nameHint: String
+    ): String? {
+        if (!base64Value.isNullOrBlank()) {
+            decodePhotoFromBase64(base64Value, nameHint)?.let { return it }
+        }
+
+        return resolveImportedUri(uriValue, backupVersion, extractedRoot, nameHint)
+    }
+
+    private fun decodePhotoFromBase64(value: String, nameHint: String): String? {
+        val targetDir = File(appContext.filesDir, "customer_photos").apply { mkdirs() }
+        return try {
+            val bytes = Base64.decode(value, Base64.DEFAULT)
+            if (bytes.isEmpty()) return null
+            val targetFile = File(
+                targetDir,
+                "${'$'}nameHint_${'$'}{System.currentTimeMillis()}_${'$'}{UUID.randomUUID()}.jpg"
+            )
+            targetFile.outputStream().use { output ->
+                output.write(bytes)
+            }
+            targetFile.absolutePath
+        } catch (e: Exception) {
+            Log.e("ReportsViewModel", "Failed to decode photo from backup", e)
+            null
+        }
     }
 
     private fun isZipFile(uri: Uri): Boolean {
