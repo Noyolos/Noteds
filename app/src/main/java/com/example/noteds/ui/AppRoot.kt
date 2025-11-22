@@ -5,14 +5,11 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.PieChart
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.listSaver
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.example.noteds.ui.customers.AddCustomerScreen
@@ -38,49 +35,23 @@ fun AppRoot(
             BottomDestination("報表", Icons.Default.PieChart)
         )
     }
-    val selectedIndex = rememberSaveable { mutableIntStateOf(0) }
+    val selectedIndex = remember { mutableIntStateOf(0) }
 
-    val screenStack = rememberSaveable(
-        saver = listSaver(
-            save = { list ->
-                list.map {
-                    when (it) {
-                        Screen.Main -> mapOf("type" to "main")
-                        Screen.AddCustomer -> mapOf("type" to "add")
-                        is Screen.CustomerDetail -> mapOf("type" to "detail", "id" to it.customerId)
-                        is Screen.EditCustomer -> mapOf("type" to "edit", "id" to it.customerId)
-                    }
-                }
-            },
-            restore = { saved ->
-                saved.mapNotNull {
-                    when (it["type"]) {
-                        "main" -> Screen.Main
-                        "add" -> Screen.AddCustomer
-                        "detail" -> (it["id"] as? Number)?.toLong()?.let(Screen::CustomerDetail)
-                        "edit" -> (it["id"] as? Number)?.toLong()?.let(Screen::EditCustomer)
-                        else -> null
-                    }
-                }
-                    .toMutableList()
-            }
-        )
-    ) { mutableListOf(Screen.Main) }
+    var screenStack by remember { mutableStateOf(listOf<Screen>(Screen.Main)) }
 
     val currentScreen = screenStack.lastOrNull() ?: Screen.Main
 
     fun navigateTo(screen: Screen) {
-        if (screen == Screen.Main) {
-            screenStack.clear()
-            screenStack.add(Screen.Main)
+        screenStack = if (screen == Screen.Main) {
+            listOf(Screen.Main)
         } else {
-            screenStack.add(screen)
+            screenStack + screen
         }
     }
 
     fun navigateBack() {
         if (screenStack.size > 1) {
-            screenStack.removeLast()
+            screenStack = screenStack.dropLast(1)
         }
     }
 
