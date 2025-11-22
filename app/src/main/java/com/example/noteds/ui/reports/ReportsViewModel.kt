@@ -682,6 +682,12 @@ class ReportsViewModel(
         extractedRoot: File?,
         nameHint: String
     ): String? {
+        // Prefer the binary photo inside the zip when available to avoid potential
+        // base64 duplication issues for large backups.
+        if (backupVersion >= 2 && extractedRoot != null && uriValue?.startsWith("photos/") == true) {
+            resolveImportedUri(uriValue, backupVersion, extractedRoot, nameHint)?.let { return it }
+        }
+
         if (!base64Value.isNullOrBlank()) {
             decodePhotoFromBase64(base64Value, nameHint)?.let { return it }
         }
