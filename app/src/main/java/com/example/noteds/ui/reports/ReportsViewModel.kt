@@ -2,6 +2,8 @@ package com.example.noteds.ui.reports
 
 import android.content.Context
 import android.net.Uri
+import android.util.Base64
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.noteds.data.entity.CustomerEntity
@@ -14,9 +16,11 @@ import java.io.File
 import java.io.FileOutputStream
 import java.util.Calendar
 import java.util.Locale
+import java.util.UUID
 import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
 import java.util.zip.ZipOutputStream
+import kotlin.io.buffered
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
@@ -363,39 +367,57 @@ class ReportsViewModel(
     fun exportBackup(destinationUri: Uri, onResult: (Boolean, String?) -> Unit) {
         viewModelScope.launch {
             val (success, message) = withContext(Dispatchers.IO) {
+                val backupDir = File(appContext.cacheDir, "backup_temp").apply {
+                    deleteRecursively()
+                    mkdirs()
+                }
+                val photosDir = File(backupDir, "photos").apply { mkdirs() }
+
                 try {
                     val customers = customerRepository.getAllCustomersSnapshot()
                     val entries = ledgerRepository.getAllEntriesSnapshot()
-                    val backupDir = File(appContext.cacheDir, "backup_temp").apply {
-                        deleteRecursively()
-                        mkdirs()
-                    }
+                    val dataJson = buildBackupJson(customers, entries, photosDir)
+                    val dataBytes = dataJson.toByteArray(Charsets.UTF_8)
 
-                    val dataJson = buildBackupJson(customers, entries)
-                    val dataFile = File(backupDir, "data.json").apply {
-                        writeText(dataJson)
-                    }
+                    Log.d(
+                        "ReportsViewModel",
+                        "Preparing backup: customers=${customers.size}, entries=${entries.size}, jsonBytes=${dataBytes.size}"
+                    )
 
-                    appContext.contentResolver.openOutputStream(destinationUri)?.use { outputStream ->
-                        ZipOutputStream(outputStream).use { zipStream ->
+                    val writeResult = appContext.contentResolver.openOutputStream(destinationUri, "w")?.use { rawStream ->
+                        ZipOutputStream(rawStream.buffered()).use { zipStream ->
                             zipStream.putNextEntry(ZipEntry("data.json"))
-                            dataFile.inputStream().use { it.copyTo(zipStream) }
+                            zipStream.write(dataBytes)
                             zipStream.closeEntry()
 
-                            val photosDir = File(appContext.filesDir, "customer_photos")
-                            if (photosDir.exists()) {
-                                photosDir.listFiles()?.forEach { photo ->
-                                    zipStream.putNextEntry(ZipEntry("customer_photos/${'$'}{photo.name}"))
+                            photosDir.walkTopDown()
+                                .filter { it.isFile }
+                                .forEach { photo ->
+                                    val relativePath = photo.relativeTo(backupDir).invariantSeparatorsPath
+                                    Log.d(
+                                        "ReportsViewModel",
+                                        "Writing photo entry $relativePath"
+                                    )
+                                    zipStream.putNextEntry(ZipEntry(relativePath))
                                     photo.inputStream().use { it.copyTo(zipStream) }
                                     zipStream.closeEntry()
                                 }
-                            }
+
+                            zipStream.finish()
                         }
-                    } ?: return@withContext false to "無法建立檔案"
+                        true
+                    } ?: false
+
+                    if (!writeResult) {
+                        return@withContext false to "無法建立檔案"
+                    }
 
                     true to "備份完成"
                 } catch (e: Exception) {
+                    Log.e("ReportsViewModel", "Failed to export backup", e)
                     false to (e.localizedMessage ?: "備份失敗")
+                } finally {
+                    backupDir.deleteRecursively()
                 }
             }
             onResult(success, message)
@@ -410,21 +432,43 @@ class ReportsViewModel(
                     mkdirs()
                 }
                 try {
-                    unzipToDirectory(sourceUri, tempDir)
-                    val dataFile = File(tempDir, "data.json")
-                    if (!dataFile.exists()) return@withContext false to "找不到資料檔"
+                    val backupBytes = appContext.contentResolver.openInputStream(sourceUri)?.use { input ->
+                        input.readBytes()
+                    } ?: return@withContext false to "無法讀取檔案"
 
-                    val (customers, entries) = parseBackupJson(dataFile.readText())
-
-                    val targetPhotoDir = File(appContext.filesDir, "customer_photos").apply { mkdirs() }
-                    val photoSourceDir = File(tempDir, "customer_photos")
-                    if (photoSourceDir.exists()) {
-                        photoSourceDir.listFiles()?.forEach { photo ->
-                            photo.copyTo(File(targetPhotoDir, photo.name), overwrite = true)
-                        }
+                    if (backupBytes.isEmpty()) {
+                        return@withContext false to "備份檔案為空或已損壞"
                     }
 
-                    backupRepository.replaceAllData(customers, entries)
+                    val isZip = isZipBytes(backupBytes)
+                    val dataFile = if (isZip) {
+                        unzipToDirectory(backupBytes, tempDir)
+                        File(tempDir, "data.json")
+                    } else {
+                        File(tempDir, "data.json").apply {
+                            writeBytes(backupBytes)
+                        }
+                    }
+                    if (!dataFile.exists()) return@withContext false to "找不到資料檔"
+
+                    val jsonText = dataFile.readText()
+                    Log.d("ReportsViewModel", "backupJson length = ${jsonText.length}")
+                    Log.d("ReportsViewModel", "backupJson head = ${jsonText.take(80)}")
+
+                    if (jsonText.isBlank()) {
+                        return@withContext false to "備份檔案內容為空或已損壞"
+                    }
+
+                    val previewVersion = runCatching { JSONObject(jsonText).optInt("backupVersion", 1) }
+                        .getOrDefault(1)
+
+                    if (previewVersion >= 2) {
+                        clearCustomerPhotoDirectory()
+                    }
+
+                    val parsed = parseBackupJson(jsonText, tempDir.takeIf { isZip })
+
+                    backupRepository.replaceAllData(parsed.customers, parsed.entries)
 
                     true to "導入完成"
                 } catch (e: Exception) {
@@ -440,9 +484,9 @@ class ReportsViewModel(
 
     private fun buildBackupJson(
         customers: List<CustomerEntity>,
-        entries: List<LedgerEntryEntity>
+        entries: List<LedgerEntryEntity>,
+        photosDir: File
     ): String {
-        val filesDirPath = appContext.filesDir.absolutePath
         val customersArray = JSONArray().apply {
             customers.forEach { customer ->
                 put(
@@ -452,13 +496,20 @@ class ReportsViewModel(
                         put("name", customer.name)
                         put("phone", customer.phone)
                         put("note", customer.note)
-                        put("profilePhotoUri", normalizeUriForBackup(customer.profilePhotoUri, filesDirPath))
-                        put("profilePhotoUri2", normalizeUriForBackup(customer.profilePhotoUri2, filesDirPath))
-                        put("profilePhotoUri3", normalizeUriForBackup(customer.profilePhotoUri3, filesDirPath))
-                        put("idCardPhotoUri", normalizeUriForBackup(customer.idCardPhotoUri, filesDirPath))
-                        put("passportPhotoUri", normalizeUriForBackup(customer.passportPhotoUri, filesDirPath))
-                        put("passportPhotoUri2", normalizeUriForBackup(customer.passportPhotoUri2, filesDirPath))
-                        put("passportPhotoUri3", normalizeUriForBackup(customer.passportPhotoUri3, filesDirPath))
+                        put("profilePhotoUri", addPhotoToBackup(customer.profilePhotoUri, photosDir, "${'$'}{customer.id}_profile1"))
+                        put("profilePhotoBase64", encodePhotoBase64(customer.profilePhotoUri))
+                        put("profilePhotoUri2", addPhotoToBackup(customer.profilePhotoUri2, photosDir, "${'$'}{customer.id}_profile2"))
+                        put("profilePhoto2Base64", encodePhotoBase64(customer.profilePhotoUri2))
+                        put("profilePhotoUri3", addPhotoToBackup(customer.profilePhotoUri3, photosDir, "${'$'}{customer.id}_profile3"))
+                        put("profilePhoto3Base64", encodePhotoBase64(customer.profilePhotoUri3))
+                        put("idCardPhotoUri", addPhotoToBackup(customer.idCardPhotoUri, photosDir, "${'$'}{customer.id}_idcard"))
+                        put("idCardPhotoBase64", encodePhotoBase64(customer.idCardPhotoUri))
+                        put("passportPhotoUri", addPhotoToBackup(customer.passportPhotoUri, photosDir, "${'$'}{customer.id}_passport1"))
+                        put("passportPhotoBase64", encodePhotoBase64(customer.passportPhotoUri))
+                        put("passportPhotoUri2", addPhotoToBackup(customer.passportPhotoUri2, photosDir, "${'$'}{customer.id}_passport2"))
+                        put("passportPhoto2Base64", encodePhotoBase64(customer.passportPhotoUri2))
+                        put("passportPhotoUri3", addPhotoToBackup(customer.passportPhotoUri3, photosDir, "${'$'}{customer.id}_passport3"))
+                        put("passportPhoto3Base64", encodePhotoBase64(customer.passportPhotoUri3))
                         put("expectedRepaymentDate", customer.expectedRepaymentDate)
                         put("initialTransactionDone", customer.initialTransactionDone)
                         put("isDeleted", customer.isDeleted)
@@ -483,18 +534,27 @@ class ReportsViewModel(
         }
 
         return JSONObject().apply {
+            put("backupVersion", 2)
             put("customers", customersArray)
             put("ledgerEntries", entriesArray)
         }.toString()
     }
 
-    private fun parseBackupJson(json: String): Pair<List<CustomerEntity>, List<LedgerEntryEntity>> {
+    private fun parseBackupJson(json: String, extractedRoot: File?): ParsedBackup {
         val root = JSONObject(json)
+        val backupVersion = root.optInt("backupVersion", 1)
         val customersArray = root.optJSONArray("customers") ?: JSONArray()
         val entriesArray = root.optJSONArray("ledgerEntries") ?: JSONArray()
         val customers = buildList {
             for (i in 0 until customersArray.length()) {
                 val obj = customersArray.getJSONObject(i)
+                val profilePhotoBase64 = obj.optNullableString("profilePhotoBase64")
+                val profilePhoto2Base64 = obj.optNullableString("profilePhoto2Base64")
+                val profilePhoto3Base64 = obj.optNullableString("profilePhoto3Base64")
+                val idCardPhotoBase64 = obj.optNullableString("idCardPhotoBase64")
+                val passportPhotoBase64 = obj.optNullableString("passportPhotoBase64")
+                val passportPhoto2Base64 = obj.optNullableString("passportPhoto2Base64")
+                val passportPhoto3Base64 = obj.optNullableString("passportPhoto3Base64")
                 add(
                     CustomerEntity(
                         id = obj.optLong("id"),
@@ -502,13 +562,13 @@ class ReportsViewModel(
                         name = obj.optString("name"),
                         phone = obj.optString("phone"),
                         note = obj.optString("note"),
-                        profilePhotoUri = resolveImportedUri(obj.optNullableString("profilePhotoUri")),
-                        profilePhotoUri2 = resolveImportedUri(obj.optNullableString("profilePhotoUri2")),
-                        profilePhotoUri3 = resolveImportedUri(obj.optNullableString("profilePhotoUri3")),
-                        idCardPhotoUri = resolveImportedUri(obj.optNullableString("idCardPhotoUri")),
-                        passportPhotoUri = resolveImportedUri(obj.optNullableString("passportPhotoUri")),
-                        passportPhotoUri2 = resolveImportedUri(obj.optNullableString("passportPhotoUri2")),
-                        passportPhotoUri3 = resolveImportedUri(obj.optNullableString("passportPhotoUri3")),
+                        profilePhotoUri = restorePhoto(obj.optNullableString("profilePhotoUri"), profilePhotoBase64, backupVersion, extractedRoot, "profile1"),
+                        profilePhotoUri2 = restorePhoto(obj.optNullableString("profilePhotoUri2"), profilePhoto2Base64, backupVersion, extractedRoot, "profile2"),
+                        profilePhotoUri3 = restorePhoto(obj.optNullableString("profilePhotoUri3"), profilePhoto3Base64, backupVersion, extractedRoot, "profile3"),
+                        idCardPhotoUri = restorePhoto(obj.optNullableString("idCardPhotoUri"), idCardPhotoBase64, backupVersion, extractedRoot, "idcard"),
+                        passportPhotoUri = restorePhoto(obj.optNullableString("passportPhotoUri"), passportPhotoBase64, backupVersion, extractedRoot, "passport1"),
+                        passportPhotoUri2 = restorePhoto(obj.optNullableString("passportPhotoUri2"), passportPhoto2Base64, backupVersion, extractedRoot, "passport2"),
+                        passportPhotoUri3 = restorePhoto(obj.optNullableString("passportPhotoUri3"), passportPhoto3Base64, backupVersion, extractedRoot, "passport3"),
                         expectedRepaymentDate = if (obj.isNull("expectedRepaymentDate")) null else obj.optLong("expectedRepaymentDate"),
                         initialTransactionDone = obj.optBoolean("initialTransactionDone", false),
                         isDeleted = obj.optBoolean("isDeleted", false)
@@ -532,47 +592,154 @@ class ReportsViewModel(
                 )
             }
         }
-        return customers to entries
+        return ParsedBackup(backupVersion, customers, entries)
     }
 
-    private fun unzipToDirectory(uri: Uri, targetDir: File) {
-        appContext.contentResolver.openInputStream(uri)?.use { inputStream ->
-            ZipInputStream(inputStream).use { zis ->
-                var entry: ZipEntry? = zis.nextEntry
-                while (entry != null) {
-                    if (entry.name.contains("..")) {
-                        throw IllegalArgumentException("偵測到不安全的檔案路徑")
-                    }
-                    val file = File(targetDir, entry.name)
-                    if (entry.isDirectory) {
-                        file.mkdirs()
-                    } else {
-                        file.parentFile?.mkdirs()
-                        FileOutputStream(file).use { output ->
-                            zis.copyTo(output)
-                        }
-                    }
-                    zis.closeEntry()
-                    entry = zis.nextEntry
+    private fun unzipToDirectory(bytes: ByteArray, targetDir: File) {
+        if (bytes.isEmpty()) throw IllegalArgumentException("無法讀取檔案")
+        ZipInputStream(bytes.inputStream()).use { zis ->
+            var entry: ZipEntry? = zis.nextEntry
+            while (entry != null) {
+                if (entry.name.contains("..")) {
+                    throw IllegalArgumentException("偵測到不安全的檔案路徑")
                 }
+                val file = File(targetDir, entry.name)
+                if (entry.isDirectory) {
+                    file.mkdirs()
+                } else {
+                    file.parentFile?.mkdirs()
+                    FileOutputStream(file).use { output ->
+                        zis.copyTo(output)
+                    }
+                }
+                zis.closeEntry()
+                entry = zis.nextEntry
             }
-        } ?: throw IllegalArgumentException("無法讀取檔案")
+        }
     }
 
-    private fun normalizeUriForBackup(uri: String?, filesDirPath: String): String? {
+    private fun addPhotoToBackup(uri: String?, photosDir: File, fileNamePrefix: String): String? {
         if (uri.isNullOrBlank()) return null
-        return if (uri.startsWith(filesDirPath)) {
-            "customer_photos/${'$'}{File(uri).name}"
-        } else uri
+        val file = File(uri)
+        if (!file.exists()) return null
+        return try {
+            val extension = file.extension.takeIf { it.isNotBlank() } ?: "jpg"
+            val backupName = "${'$'}fileNamePrefix.$extension"
+            val destination = File(photosDir, backupName)
+            file.copyTo(destination, overwrite = true)
+            "photos/${'$'}backupName"
+        } catch (e: Exception) {
+            Log.e("ReportsViewModel", "Failed to copy photo for backup", e)
+            null
+        }
     }
 
-    private fun resolveImportedUri(value: String?): String? {
+    private fun encodePhotoBase64(uri: String?): String? {
+        if (uri.isNullOrBlank()) return null
+        val file = File(uri)
+        if (!file.exists()) return null
+        return try {
+            Base64.encodeToString(file.readBytes(), Base64.NO_WRAP)
+        } catch (e: Exception) {
+            Log.e("ReportsViewModel", "Failed to encode photo for backup", e)
+            null
+        }
+    }
+
+    private fun resolveImportedUri(
+        value: String?,
+        backupVersion: Int,
+        extractedRoot: File?,
+        nameHint: String
+    ): String? {
         if (value.isNullOrBlank()) return null
-        return if (value.startsWith("customer_photos/")) {
-            File(appContext.filesDir, value).absolutePath
-        } else value
+        val targetDir = File(appContext.filesDir, "customer_photos").apply { mkdirs() }
+
+        if (backupVersion >= 2 && extractedRoot != null && value.startsWith("photos/")) {
+            val sourceFile = File(extractedRoot, value)
+            if (!sourceFile.exists()) return null
+
+            return try {
+                val extension = sourceFile.extension.takeIf { it.isNotBlank() } ?: "jpg"
+                val targetFile = File(
+                    targetDir,
+                    "${'$'}nameHint_${System.currentTimeMillis()}_${UUID.randomUUID()}.$extension"
+                )
+                sourceFile.copyTo(targetFile, overwrite = true)
+                targetFile.absolutePath
+            } catch (e: Exception) {
+                Log.e("ReportsViewModel", "Failed to restore photo from backup", e)
+                null
+            }
+        }
+
+        if (value.startsWith("customer_photos/")) {
+            return File(targetDir, value.removePrefix("customer_photos/")).absolutePath
+        }
+        return value
+    }
+
+    private fun restorePhoto(
+        uriValue: String?,
+        base64Value: String?,
+        backupVersion: Int,
+        extractedRoot: File?,
+        nameHint: String
+    ): String? {
+        // Prefer the binary photo inside the zip when available to avoid potential
+        // base64 duplication issues for large backups.
+        if (backupVersion >= 2 && extractedRoot != null && uriValue?.startsWith("photos/") == true) {
+            resolveImportedUri(uriValue, backupVersion, extractedRoot, nameHint)?.let { return it }
+        }
+
+        if (!base64Value.isNullOrBlank()) {
+            decodePhotoFromBase64(base64Value, nameHint)?.let { return it }
+        }
+
+        return resolveImportedUri(uriValue, backupVersion, extractedRoot, nameHint)
+    }
+
+    private fun decodePhotoFromBase64(value: String, nameHint: String): String? {
+        val targetDir = File(appContext.filesDir, "customer_photos").apply { mkdirs() }
+        return try {
+            val bytes = Base64.decode(value, Base64.DEFAULT)
+            if (bytes.isEmpty()) return null
+            val targetFile = File(
+                targetDir,
+                "${'$'}nameHint_${'$'}{System.currentTimeMillis()}_${'$'}{UUID.randomUUID()}.jpg"
+            )
+            targetFile.outputStream().use { output ->
+                output.write(bytes)
+            }
+            targetFile.absolutePath
+        } catch (e: Exception) {
+            Log.e("ReportsViewModel", "Failed to decode photo from backup", e)
+            null
+        }
+    }
+
+    private fun isZipBytes(bytes: ByteArray): Boolean {
+        if (bytes.size < 4) return false
+        return bytes[0] == 'P'.code.toByte() &&
+            bytes[1] == 'K'.code.toByte() &&
+            bytes[2] == 3.toByte() &&
+            bytes[3] == 4.toByte()
+    }
+
+    private fun clearCustomerPhotoDirectory() {
+        val targetPhotoDir = File(appContext.filesDir, "customer_photos")
+        if (targetPhotoDir.exists()) {
+            targetPhotoDir.deleteRecursively()
+        }
+        targetPhotoDir.mkdirs()
     }
 
     private fun JSONObject.optNullableString(name: String): String? =
         if (isNull(name)) null else optString(name, null)
+
+    data class ParsedBackup(
+        val backupVersion: Int,
+        val customers: List<CustomerEntity>,
+        val entries: List<LedgerEntryEntity>
+    )
 }
