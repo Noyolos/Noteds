@@ -414,20 +414,33 @@ class ReportsViewModel(
                     mkdirs()
                 }
                 try {
-                    val isZip = isZipFile(sourceUri)
+                    val backupBytes = appContext.contentResolver.openInputStream(sourceUri)?.use { input ->
+                        input.readBytes()
+                    } ?: return@withContext false to "無法讀取檔案"
+
+                    if (backupBytes.isEmpty()) {
+                        return@withContext false to "備份檔案為空或已損壞"
+                    }
+
+                    val isZip = isZipBytes(backupBytes)
                     val dataFile = if (isZip) {
-                        unzipToDirectory(sourceUri, tempDir)
+                        unzipToDirectory(backupBytes, tempDir)
                         File(tempDir, "data.json")
                     } else {
                         File(tempDir, "data.json").apply {
-                            appContext.contentResolver.openInputStream(sourceUri)?.use { input ->
-                                outputStream().use { input.copyTo(it) }
-                            } ?: throw IllegalArgumentException("無法讀取檔案")
+                            writeBytes(backupBytes)
                         }
                     }
                     if (!dataFile.exists()) return@withContext false to "找不到資料檔"
 
                     val jsonText = dataFile.readText()
+                    Log.d("ReportsViewModel", "backupJson length = ${jsonText.length}")
+                    Log.d("ReportsViewModel", "backupJson head = ${jsonText.take(80)}")
+
+                    if (jsonText.isBlank()) {
+                        return@withContext false to "備份檔案內容為空或已損壞"
+                    }
+
                     val previewVersion = runCatching { JSONObject(jsonText).optInt("backupVersion", 1) }
                         .getOrDefault(1)
 
@@ -564,28 +577,27 @@ class ReportsViewModel(
         return ParsedBackup(backupVersion, customers, entries)
     }
 
-    private fun unzipToDirectory(uri: Uri, targetDir: File) {
-        appContext.contentResolver.openInputStream(uri)?.use { inputStream ->
-            ZipInputStream(inputStream).use { zis ->
-                var entry: ZipEntry? = zis.nextEntry
-                while (entry != null) {
-                    if (entry.name.contains("..")) {
-                        throw IllegalArgumentException("偵測到不安全的檔案路徑")
-                    }
-                    val file = File(targetDir, entry.name)
-                    if (entry.isDirectory) {
-                        file.mkdirs()
-                    } else {
-                        file.parentFile?.mkdirs()
-                        FileOutputStream(file).use { output ->
-                            zis.copyTo(output)
-                        }
-                    }
-                    zis.closeEntry()
-                    entry = zis.nextEntry
+    private fun unzipToDirectory(bytes: ByteArray, targetDir: File) {
+        if (bytes.isEmpty()) throw IllegalArgumentException("無法讀取檔案")
+        ZipInputStream(bytes.inputStream()).use { zis ->
+            var entry: ZipEntry? = zis.nextEntry
+            while (entry != null) {
+                if (entry.name.contains("..")) {
+                    throw IllegalArgumentException("偵測到不安全的檔案路徑")
                 }
+                val file = File(targetDir, entry.name)
+                if (entry.isDirectory) {
+                    file.mkdirs()
+                } else {
+                    file.parentFile?.mkdirs()
+                    FileOutputStream(file).use { output ->
+                        zis.copyTo(output)
+                    }
+                }
+                zis.closeEntry()
+                entry = zis.nextEntry
             }
-        } ?: throw IllegalArgumentException("無法讀取檔案")
+        }
     }
 
     private fun addPhotoToBackup(uri: String?, photosDir: File, fileNamePrefix: String): String? {
@@ -682,20 +694,12 @@ class ReportsViewModel(
         }
     }
 
-    private fun isZipFile(uri: Uri): Boolean {
-        return try {
-            appContext.contentResolver.openInputStream(uri)?.use { stream ->
-                val header = ByteArray(4)
-                if (stream.read(header) == 4) {
-                    header[0] == 'P'.code.toByte() &&
-                        header[1] == 'K'.code.toByte() &&
-                        header[2] == 3.toByte() &&
-                        header[3] == 4.toByte()
-                } else false
-            } ?: false
-        } catch (e: Exception) {
-            false
-        }
+    private fun isZipBytes(bytes: ByteArray): Boolean {
+        if (bytes.size < 4) return false
+        return bytes[0] == 'P'.code.toByte() &&
+            bytes[1] == 'K'.code.toByte() &&
+            bytes[2] == 3.toByte() &&
+            bytes[3] == 4.toByte()
     }
 
     private fun clearCustomerPhotoDirectory() {
