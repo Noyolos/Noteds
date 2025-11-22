@@ -37,7 +37,7 @@ data class DebtorData(
     val id: Long,
     val name: String,
     val amount: Double,
-    val photoUri: String? = null // 新增字段：头像路径
+    val photoUri: String? = null
 )
 
 data class MonthlyStats(
@@ -85,7 +85,7 @@ class ReportsViewModel(
         .map { list ->
             list.filter { it.amount > 0.0 }
                 .sortedByDescending { it.amount }
-                .take(10) // Top 10 as requested
+                .take(10)
         }
         .stateIn(
             scope = viewModelScope,
@@ -98,7 +98,7 @@ class ReportsViewModel(
             val (start, end) = getMonthRange()
             entries.filter {
                 it.timestamp in start..end &&
-                    it.type.uppercase() == TransactionType.DEBT.dbValue
+                        it.type.uppercase() == TransactionType.DEBT.dbValue
             }
                 .sumOf { it.amount }
         }
@@ -113,7 +113,7 @@ class ReportsViewModel(
             val (start, end) = getMonthRange()
             entries.filter {
                 it.timestamp in start..end &&
-                    it.type.uppercase() == TransactionType.PAYMENT.dbValue
+                        it.type.uppercase() == TransactionType.PAYMENT.dbValue
             }
                 .sumOf { it.amount }
         }
@@ -123,7 +123,6 @@ class ReportsViewModel(
             initialValue = 0.0
         )
 
-    // Monthly Comparison (Last 6 Months)
     val last6MonthsStats: StateFlow<List<MonthlyStats>> = ledgerRepository.getAllEntries()
         .map { entries ->
             calculateLast6Months(entries)
@@ -134,7 +133,6 @@ class ReportsViewModel(
             initialValue = emptyList()
         )
 
-    // Aging Distribution (FIFO logic)
     val agingStats: StateFlow<List<AgingData>> = ledgerRepository.getAllEntries()
         .map { entries ->
             calculateAging(entries)
@@ -167,7 +165,7 @@ class ReportsViewModel(
             val recentDebt = entries
                 .filter {
                     it.type.uppercase() == TransactionType.DEBT.dbValue &&
-                        it.timestamp >= thirtyDaysAgo
+                            it.timestamp >= thirtyDaysAgo
                 }
                 .sumOf { it.amount }
 
@@ -179,7 +177,6 @@ class ReportsViewModel(
             initialValue = 0.0
         )
 
-    // Real Trend Data (Last 6 Months Total Outstanding Debt)
     val totalDebtTrend: StateFlow<List<Float>> = ledgerRepository.getAllEntries()
         .map { entries ->
             calculateDebtTrend(entries)
@@ -195,7 +192,6 @@ class ReportsViewModel(
         val stats = mutableListOf<MonthlyStats>()
 
         for (i in 0..5) {
-            // Start/End of this month
             val calStart = calendar.clone() as Calendar
             calStart.set(Calendar.DAY_OF_MONTH, 1)
             calStart.set(Calendar.HOUR_OF_DAY, 0)
@@ -220,7 +216,7 @@ class ReportsViewModel(
                 .sumOf { it.amount }
 
             val monthName = String.format(java.util.Locale.US, "%tb", calStart)
-            stats.add(0, MonthlyStats(monthName, debt, payment)) // Add to front to have chronological order
+            stats.add(0, MonthlyStats(monthName, debt, payment))
 
             calendar.add(Calendar.MONTH, -1)
         }
@@ -228,13 +224,10 @@ class ReportsViewModel(
     }
 
     private fun calculateAging(entries: List<LedgerEntryEntity>): List<AgingData> {
-        // FIFO Logic
-        // 1. Get Total Payments
         var totalPayments = entries
             .filter { it.type.uppercase() == TransactionType.PAYMENT.dbValue }
             .sumOf { it.amount }
 
-        // 2. Get Debts sorted by oldest first
         val debts = entries
             .filter { it.type.uppercase() == TransactionType.DEBT.dbValue }
             .sortedBy { it.timestamp }
@@ -249,14 +242,11 @@ class ReportsViewModel(
 
         for (debt in debts) {
             if (totalPayments >= debt.amount) {
-                // Fully paid
                 totalPayments -= debt.amount
             } else {
-                // Partially paid or unpaid
                 val remainingDebt = debt.amount - totalPayments
                 totalPayments = 0.0
 
-                // Bucket the remaining debt based on age
                 val age = (now - debt.timestamp) / day
                 when {
                     age <= 30 -> bucket0to30 += remainingDebt
@@ -268,23 +258,21 @@ class ReportsViewModel(
         }
 
         return listOf(
-            AgingData("0-30 Days", bucket0to30, 0xFF00C853), // Green
-            AgingData("31-60 Days", bucket31to60, 0xFFFFAB00), // Yellow
-            AgingData("61-90 Days", bucket61to90, 0xFFFF6D00), // Orange
-            AgingData("90+ Days", bucket90plus, 0xFFD50000)   // Red
+            AgingData("0-30 Days", bucket0to30, 0xFF00C853),
+            AgingData("31-60 Days", bucket31to60, 0xFFFFAB00),
+            AgingData("61-90 Days", bucket61to90, 0xFFFF6D00),
+            AgingData("90+ Days", bucket90plus, 0xFFD50000)
         )
     }
 
     private fun calculateDebtTrend(entries: List<LedgerEntryEntity>): List<Float> {
         val calendar = Calendar.getInstance()
-        // Go to end of current month
         calendar.set(Calendar.DAY_OF_MONTH, 1)
         calendar.add(Calendar.MONTH, 1)
-        calendar.add(Calendar.MILLISECOND, -1) // End of current month
+        calendar.add(Calendar.MILLISECOND, -1)
 
         val points = mutableListOf<Double>()
 
-        // Calculate for last 6 months (including current)
         for (i in 0..5) {
             val endTime = calendar.timeInMillis
 
@@ -296,28 +284,18 @@ class ReportsViewModel(
                 .sumOf { it.amount }
             val outstanding = (debtsUntilNow - paymentsUntilNow).coerceAtLeast(0.0)
 
-            points.add(0, outstanding) // Add to front (oldest first)
-
-            // Move to previous month
+            points.add(0, outstanding)
             calendar.add(Calendar.MONTH, -1)
         }
 
-        // Normalize to 0.0 - 1.0
         val maxVal = points.maxOrNull() ?: 1.0
         val minVal = points.minOrNull() ?: 0.0
         val range = if (maxVal == minVal) 1.0 else maxVal - minVal
 
-        // If all are zero, return straight line 0.5
         if (maxVal == 0.0) return listOf(0f, 0f, 0f, 0f, 0f, 0f)
 
         return points.map {
-            // Normalize relative to max to fill chart, but keep 0 at bottom if relevant?
-            // Usually trend line fits min-max.
-            // Let's normalize between min and max.
-            // If we want 0 to be bottom, normalize value / maxVal.
             ((it - minVal) / range).toFloat()
-            // Or simple ratio if we want absolute scale?
-            // Design usually prefers relative shape.
         }
     }
 
@@ -359,7 +337,7 @@ class ReportsViewModel(
                     id = customer.id,
                     name = customer.name,
                     amount = balanceByCustomer[customer.id] ?: 0.0,
-                    photoUri = customer.profilePhotoUri // <--- 映射头像路径
+                    photoUri = customer.profilePhotoUri
                 )
             }
         }
@@ -394,10 +372,6 @@ class ReportsViewModel(
                                 .filter { it.isFile }
                                 .forEach { photo ->
                                     val relativePath = photo.relativeTo(backupDir).invariantSeparatorsPath
-                                    Log.d(
-                                        "ReportsViewModel",
-                                        "Writing photo entry $relativePath"
-                                    )
                                     zipStream.putNextEntry(ZipEntry(relativePath))
                                     photo.inputStream().use { it.copyTo(zipStream) }
                                     zipStream.closeEntry()
@@ -413,9 +387,9 @@ class ReportsViewModel(
                     }
 
                     true to "備份完成"
-                } catch (e: Exception) {
+                } catch (e: Throwable) { // 修改：捕获 Throwable 防止 OOM 导致崩溃
                     Log.e("ReportsViewModel", "Failed to export backup", e)
-                    false to (e.localizedMessage ?: "備份失敗")
+                    false to (e.localizedMessage ?: "備份失敗：可能因為儲存空間或記憶體不足")
                 } finally {
                     backupDir.deleteRecursively()
                 }
@@ -432,29 +406,32 @@ class ReportsViewModel(
                     mkdirs()
                 }
                 try {
-                    val backupBytes = appContext.contentResolver.openInputStream(sourceUri)?.use { input ->
-                        input.readBytes()
+                    // 修改：流式写入临时文件，防止读取大文件导致 OOM
+                    val tempZipFile = File(tempDir, "temp_restore.zip")
+                    appContext.contentResolver.openInputStream(sourceUri)?.use { input ->
+                        tempZipFile.outputStream().use { output ->
+                            input.copyTo(output)
+                        }
                     } ?: return@withContext false to "無法讀取檔案"
 
-                    if (backupBytes.isEmpty()) {
+                    if (tempZipFile.length() == 0L) {
                         return@withContext false to "備份檔案為空或已損壞"
                     }
 
-                    val isZip = isZipBytes(backupBytes)
+                    val isZip = isZipFile(tempZipFile)
                     val dataFile = if (isZip) {
-                        unzipToDirectory(backupBytes, tempDir)
+                        unzipToDirectory(tempZipFile, tempDir)
                         File(tempDir, "data.json")
                     } else {
+                        // 尝试直接作为 json 读取 (兼容旧版非 zip 备份)
                         File(tempDir, "data.json").apply {
-                            writeBytes(backupBytes)
+                            tempZipFile.copyTo(this, overwrite = true)
                         }
                     }
+
                     if (!dataFile.exists()) return@withContext false to "找不到資料檔"
 
                     val jsonText = dataFile.readText()
-                    Log.d("ReportsViewModel", "backupJson length = ${jsonText.length}")
-                    Log.d("ReportsViewModel", "backupJson head = ${jsonText.take(80)}")
-
                     if (jsonText.isBlank()) {
                         return@withContext false to "備份檔案內容為空或已損壞"
                     }
@@ -471,9 +448,10 @@ class ReportsViewModel(
                     backupRepository.replaceAllData(parsed.customers, parsed.entries)
 
                     true to "導入完成"
-                } catch (e: Exception) {
-                    false to ((e.localizedMessage ?: "導入失敗，資料未更動。請確認備份檔案是否完整")
-                        .ifBlank { "導入失敗，資料未更動。請確認備份檔案是否完整" })
+                } catch (e: Throwable) {
+                    Log.e("ReportsViewModel", "Failed to import backup", e)
+                    false to ((e.localizedMessage ?: "導入失敗，資料未更動")
+                        .ifBlank { "導入失敗，資料未更動" })
                 } finally {
                     tempDir.deleteRecursively()
                 }
@@ -496,20 +474,16 @@ class ReportsViewModel(
                         put("name", customer.name)
                         put("phone", customer.phone)
                         put("note", customer.note)
-                        put("profilePhotoUri", addPhotoToBackup(customer.profilePhotoUri, photosDir, "${'$'}{customer.id}_profile1"))
-                        put("profilePhotoBase64", encodePhotoBase64(customer.profilePhotoUri))
-                        put("profilePhotoUri2", addPhotoToBackup(customer.profilePhotoUri2, photosDir, "${'$'}{customer.id}_profile2"))
-                        put("profilePhoto2Base64", encodePhotoBase64(customer.profilePhotoUri2))
-                        put("profilePhotoUri3", addPhotoToBackup(customer.profilePhotoUri3, photosDir, "${'$'}{customer.id}_profile3"))
-                        put("profilePhoto3Base64", encodePhotoBase64(customer.profilePhotoUri3))
-                        put("idCardPhotoUri", addPhotoToBackup(customer.idCardPhotoUri, photosDir, "${'$'}{customer.id}_idcard"))
-                        put("idCardPhotoBase64", encodePhotoBase64(customer.idCardPhotoUri))
-                        put("passportPhotoUri", addPhotoToBackup(customer.passportPhotoUri, photosDir, "${'$'}{customer.id}_passport1"))
-                        put("passportPhotoBase64", encodePhotoBase64(customer.passportPhotoUri))
-                        put("passportPhotoUri2", addPhotoToBackup(customer.passportPhotoUri2, photosDir, "${'$'}{customer.id}_passport2"))
-                        put("passportPhoto2Base64", encodePhotoBase64(customer.passportPhotoUri2))
-                        put("passportPhotoUri3", addPhotoToBackup(customer.passportPhotoUri3, photosDir, "${'$'}{customer.id}_passport3"))
-                        put("passportPhoto3Base64", encodePhotoBase64(customer.passportPhotoUri3))
+
+                        // 修复：确保文件名唯一，且不使用 Base64 (避免内存溢出)
+                        put("profilePhotoUri", addPhotoToBackup(customer.profilePhotoUri, photosDir, "${customer.id}_profile1"))
+                        put("profilePhotoUri2", addPhotoToBackup(customer.profilePhotoUri2, photosDir, "${customer.id}_profile2"))
+                        put("profilePhotoUri3", addPhotoToBackup(customer.profilePhotoUri3, photosDir, "${customer.id}_profile3"))
+                        put("idCardPhotoUri", addPhotoToBackup(customer.idCardPhotoUri, photosDir, "${customer.id}_idcard"))
+                        put("passportPhotoUri", addPhotoToBackup(customer.passportPhotoUri, photosDir, "${customer.id}_passport1"))
+                        put("passportPhotoUri2", addPhotoToBackup(customer.passportPhotoUri2, photosDir, "${customer.id}_passport2"))
+                        put("passportPhotoUri3", addPhotoToBackup(customer.passportPhotoUri3, photosDir, "${customer.id}_passport3"))
+
                         put("expectedRepaymentDate", customer.expectedRepaymentDate)
                         put("initialTransactionDone", customer.initialTransactionDone)
                         put("isDeleted", customer.isDeleted)
@@ -548,6 +522,9 @@ class ReportsViewModel(
         val customers = buildList {
             for (i in 0 until customersArray.length()) {
                 val obj = customersArray.getJSONObject(i)
+                val id = obj.optLong("id")
+
+                // 即使 JSON 中没有 Base64 字段，也不影响 restorePhoto 的工作（它会查找文件）
                 val profilePhotoBase64 = obj.optNullableString("profilePhotoBase64")
                 val profilePhoto2Base64 = obj.optNullableString("profilePhoto2Base64")
                 val profilePhoto3Base64 = obj.optNullableString("profilePhoto3Base64")
@@ -555,20 +532,22 @@ class ReportsViewModel(
                 val passportPhotoBase64 = obj.optNullableString("passportPhotoBase64")
                 val passportPhoto2Base64 = obj.optNullableString("passportPhoto2Base64")
                 val passportPhoto3Base64 = obj.optNullableString("passportPhoto3Base64")
+
                 add(
                     CustomerEntity(
-                        id = obj.optLong("id"),
+                        id = id,
                         code = obj.optString("code", ""),
                         name = obj.optString("name"),
                         phone = obj.optString("phone"),
                         note = obj.optString("note"),
-                        profilePhotoUri = restorePhoto(obj.optNullableString("profilePhotoUri"), profilePhotoBase64, backupVersion, extractedRoot, "profile1"),
-                        profilePhotoUri2 = restorePhoto(obj.optNullableString("profilePhotoUri2"), profilePhoto2Base64, backupVersion, extractedRoot, "profile2"),
-                        profilePhotoUri3 = restorePhoto(obj.optNullableString("profilePhotoUri3"), profilePhoto3Base64, backupVersion, extractedRoot, "profile3"),
-                        idCardPhotoUri = restorePhoto(obj.optNullableString("idCardPhotoUri"), idCardPhotoBase64, backupVersion, extractedRoot, "idcard"),
-                        passportPhotoUri = restorePhoto(obj.optNullableString("passportPhotoUri"), passportPhotoBase64, backupVersion, extractedRoot, "passport1"),
-                        passportPhotoUri2 = restorePhoto(obj.optNullableString("passportPhotoUri2"), passportPhoto2Base64, backupVersion, extractedRoot, "passport2"),
-                        passportPhotoUri3 = restorePhoto(obj.optNullableString("passportPhotoUri3"), passportPhoto3Base64, backupVersion, extractedRoot, "passport3"),
+                        // 修复：使用 ID 作为文件名前缀，防止所有客户头像变成同一张
+                        profilePhotoUri = restorePhoto(obj.optNullableString("profilePhotoUri"), profilePhotoBase64, backupVersion, extractedRoot, "${id}_profile1"),
+                        profilePhotoUri2 = restorePhoto(obj.optNullableString("profilePhotoUri2"), profilePhoto2Base64, backupVersion, extractedRoot, "${id}_profile2"),
+                        profilePhotoUri3 = restorePhoto(obj.optNullableString("profilePhotoUri3"), profilePhoto3Base64, backupVersion, extractedRoot, "${id}_profile3"),
+                        idCardPhotoUri = restorePhoto(obj.optNullableString("idCardPhotoUri"), idCardPhotoBase64, backupVersion, extractedRoot, "${id}_idcard"),
+                        passportPhotoUri = restorePhoto(obj.optNullableString("passportPhotoUri"), passportPhotoBase64, backupVersion, extractedRoot, "${id}_passport1"),
+                        passportPhotoUri2 = restorePhoto(obj.optNullableString("passportPhotoUri2"), passportPhoto2Base64, backupVersion, extractedRoot, "${id}_passport2"),
+                        passportPhotoUri3 = restorePhoto(obj.optNullableString("passportPhotoUri3"), passportPhoto3Base64, backupVersion, extractedRoot, "${id}_passport3"),
                         expectedRepaymentDate = if (obj.isNull("expectedRepaymentDate")) null else obj.optLong("expectedRepaymentDate"),
                         initialTransactionDone = obj.optBoolean("initialTransactionDone", false),
                         isDeleted = obj.optBoolean("isDeleted", false)
@@ -595,9 +574,8 @@ class ReportsViewModel(
         return ParsedBackup(backupVersion, customers, entries)
     }
 
-    private fun unzipToDirectory(bytes: ByteArray, targetDir: File) {
-        if (bytes.isEmpty()) throw IllegalArgumentException("無法讀取檔案")
-        ZipInputStream(bytes.inputStream()).use { zis ->
+    private fun unzipToDirectory(zipFile: File, targetDir: File) {
+        ZipInputStream(zipFile.inputStream()).use { zis ->
             var entry: ZipEntry? = zis.nextEntry
             while (entry != null) {
                 if (entry.name.contains("..")) {
@@ -624,24 +602,13 @@ class ReportsViewModel(
         if (!file.exists()) return null
         return try {
             val extension = file.extension.takeIf { it.isNotBlank() } ?: "jpg"
-            val backupName = "${'$'}fileNamePrefix.$extension"
+            // 修复：正确使用变量，而不是字面量字符串
+            val backupName = "$fileNamePrefix.$extension"
             val destination = File(photosDir, backupName)
             file.copyTo(destination, overwrite = true)
-            "photos/${'$'}backupName"
+            "photos/$backupName"
         } catch (e: Exception) {
             Log.e("ReportsViewModel", "Failed to copy photo for backup", e)
-            null
-        }
-    }
-
-    private fun encodePhotoBase64(uri: String?): String? {
-        if (uri.isNullOrBlank()) return null
-        val file = File(uri)
-        if (!file.exists()) return null
-        return try {
-            Base64.encodeToString(file.readBytes(), Base64.NO_WRAP)
-        } catch (e: Exception) {
-            Log.e("ReportsViewModel", "Failed to encode photo for backup", e)
             null
         }
     }
@@ -663,7 +630,7 @@ class ReportsViewModel(
                 val extension = sourceFile.extension.takeIf { it.isNotBlank() } ?: "jpg"
                 val targetFile = File(
                     targetDir,
-                    "${'$'}nameHint_${System.currentTimeMillis()}_${UUID.randomUUID()}.$extension"
+                    "${nameHint}_${System.currentTimeMillis()}_${UUID.randomUUID()}.$extension"
                 )
                 sourceFile.copyTo(targetFile, overwrite = true)
                 targetFile.absolutePath
@@ -686,12 +653,6 @@ class ReportsViewModel(
         extractedRoot: File?,
         nameHint: String
     ): String? {
-        // Prefer the binary photo inside the zip when available to avoid potential
-        // base64 duplication issues for large backups.
-        if (backupVersion >= 2 && extractedRoot != null && uriValue?.startsWith("photos/") == true) {
-            resolveImportedUri(uriValue, backupVersion, extractedRoot, nameHint)?.let { return it }
-        }
-
         if (!base64Value.isNullOrBlank()) {
             decodePhotoFromBase64(base64Value, nameHint)?.let { return it }
         }
@@ -706,7 +667,7 @@ class ReportsViewModel(
             if (bytes.isEmpty()) return null
             val targetFile = File(
                 targetDir,
-                "${'$'}nameHint_${'$'}{System.currentTimeMillis()}_${'$'}{UUID.randomUUID()}.jpg"
+                "${nameHint}_${System.currentTimeMillis()}_${UUID.randomUUID()}.jpg"
             )
             targetFile.outputStream().use { output ->
                 output.write(bytes)
@@ -718,12 +679,21 @@ class ReportsViewModel(
         }
     }
 
-    private fun isZipBytes(bytes: ByteArray): Boolean {
-        if (bytes.size < 4) return false
-        return bytes[0] == 'P'.code.toByte() &&
-            bytes[1] == 'K'.code.toByte() &&
-            bytes[2] == 3.toByte() &&
-            bytes[3] == 4.toByte()
+    private fun isZipFile(file: File): Boolean {
+        if (file.length() < 4) return false
+        // 简单读取头4个字节检查 PK 标记
+        return try {
+            file.inputStream().use { input ->
+                val bytes = ByteArray(4)
+                if (input.read(bytes) != 4) return false
+                bytes[0] == 'P'.code.toByte() &&
+                        bytes[1] == 'K'.code.toByte() &&
+                        bytes[2] == 3.toByte() &&
+                        bytes[3] == 4.toByte()
+            }
+        } catch (e: Exception) {
+            false
+        }
     }
 
     private fun clearCustomerPhotoDirectory() {
