@@ -34,8 +34,39 @@ fun AddCustomerScreen(
     var phone by remember { mutableStateOf("") }
     var initialAmount by remember { mutableStateOf("") }
     var note by remember { mutableStateOf("") }
+    var nameError by remember { mutableStateOf<String?>(null) }
+    var phoneError by remember { mutableStateOf<String?>(null) }
+    var initialAmountError by remember { mutableStateOf<String?>(null) }
     val profilePhotos = remember { mutableStateListOf<String?>(null, null, null) }
     val passportPhotos = remember { mutableStateListOf<String?>(null, null, null) }
+
+    fun validatePhone(input: String): Boolean {
+        val normalized = input.trim()
+        val pattern = Regex("^[0-9+\\-\\s]{6,20}")
+        return normalized.isEmpty() || pattern.matches(normalized)
+    }
+
+    fun validate(): Boolean {
+        var valid = true
+        val trimmedName = name.trim()
+        if (trimmedName.isEmpty()) {
+            nameError = "姓名必填"
+            valid = false
+        }
+        val trimmedPhone = phone.trim()
+        if (trimmedPhone.isNotEmpty() && !validatePhone(trimmedPhone)) {
+            phoneError = "電話格式不正確"
+            valid = false
+        }
+        if (initialAmount.isNotBlank()) {
+            val value = initialAmount.toDoubleOrNull()
+            if (value == null || value <= 0) {
+                initialAmountError = "金額必須大於 0"
+                valid = false
+            }
+        }
+        return valid
+    }
 
     Scaffold(
         topBar = {
@@ -52,7 +83,10 @@ fun AddCustomerScreen(
         bottomBar = {
             Button(
                 onClick = {
-                    if (name.isNotBlank()) {
+                    nameError = null
+                    phoneError = null
+                    initialAmountError = null
+                    if (validate()) {
                         customerViewModel.addCustomer(
                             code = code,
                             name = name,
@@ -117,7 +151,10 @@ fun AddCustomerScreen(
 
                 OutlinedTextField(
                     value = name,
-                    onValueChange = { name = it },
+                    onValueChange = {
+                        name = it
+                        nameError = null
+                    },
                     placeholder = { Text("客戶姓名 *") },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
@@ -128,11 +165,22 @@ fun AddCustomerScreen(
                         unfocusedBorderColor = Color.Transparent
                     ),
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                    isError = nameError != null,
                     textStyle = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold, color = MidnightBlue)
                 )
+                if (nameError != null) {
+                    Text(
+                        text = nameError!!,
+                        color = FunctionalRed,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
                 OutlinedTextField(
                     value = phone,
-                    onValueChange = { phone = it },
+                    onValueChange = {
+                        phone = it
+                        phoneError = null
+                    },
                     placeholder = { Text("電話號碼") },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
@@ -143,8 +191,16 @@ fun AddCustomerScreen(
                         unfocusedBorderColor = Color.Transparent
                     ),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone, imeAction = ImeAction.Next),
+                    isError = phoneError != null,
                      textStyle = MaterialTheme.typography.bodyLarge.copy(color = MidnightBlue)
                 )
+                if (phoneError != null) {
+                    Text(
+                        text = phoneError!!,
+                        color = FunctionalRed,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
             }
 
             PhotoGrid(
@@ -160,7 +216,10 @@ fun AddCustomerScreen(
 
                 OutlinedTextField(
                     value = initialAmount,
-                    onValueChange = { initialAmount = it },
+                    onValueChange = {
+                        initialAmount = it
+                        initialAmountError = null
+                    },
                     placeholder = { Text("欠款金額 (RM)") },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
@@ -171,8 +230,16 @@ fun AddCustomerScreen(
                         unfocusedBorderColor = Color.Transparent
                     ),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Next),
+                    isError = initialAmountError != null,
                     textStyle = MaterialTheme.typography.bodyLarge.copy(color = DebtColor, fontWeight = FontWeight.Bold)
                 )
+                if (initialAmountError != null) {
+                    Text(
+                        text = initialAmountError!!,
+                        color = FunctionalRed,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
                 OutlinedTextField(
                     value = note,
                     onValueChange = { note = it },

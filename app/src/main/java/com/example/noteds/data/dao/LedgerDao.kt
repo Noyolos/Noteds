@@ -11,13 +11,35 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface LedgerDao {
-    @Query("SELECT * FROM ledger_entries WHERE customerId = :customerId ORDER BY timestamp DESC")
+    @Query(
+        """
+        SELECT le.*
+        FROM ledger_entries le
+        INNER JOIN customers c ON c.id = le.customerId
+        WHERE c.isDeleted = 0 AND le.customerId = :customerId
+        ORDER BY le.timestamp DESC
+        """
+    )
     fun getEntriesForCustomer(customerId: Long): Flow<List<LedgerEntryEntity>>
 
-    @Query("SELECT * FROM ledger_entries")
+    @Query(
+        """
+        SELECT le.*
+        FROM ledger_entries le
+        INNER JOIN customers c ON c.id = le.customerId
+        WHERE c.isDeleted = 0
+        """
+    )
     fun getAllEntries(): Flow<List<LedgerEntryEntity>>
 
-    @Query("SELECT * FROM ledger_entries")
+    @Query(
+        """
+        SELECT le.*
+        FROM ledger_entries le
+        INNER JOIN customers c ON c.id = le.customerId
+        WHERE c.isDeleted = 0
+        """
+    )
     suspend fun getAllEntriesSnapshot(): List<LedgerEntryEntity>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -34,4 +56,10 @@ interface LedgerDao {
 
     @Query("DELETE FROM ledger_entries WHERE customerId = :customerId")
     suspend fun deleteEntriesForCustomer(customerId: Long)
+
+    @Query("DELETE FROM ledger_entries")
+    suspend fun deleteAllEntries()
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertEntries(entries: List<LedgerEntryEntity>)
 }

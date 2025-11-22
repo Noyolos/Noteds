@@ -39,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.noteds.data.entity.LedgerEntryEntity
+import com.example.noteds.data.model.TransactionType
 import com.example.noteds.ui.components.FullScreenImageDialog
 import com.example.noteds.ui.theme.*
 import java.text.NumberFormat
@@ -62,7 +63,7 @@ fun CustomerDetailScreen(
     val transactions by customerViewModel.getTransactionsForCustomer(customerId)
         .collectAsState(initial = emptyList())
 
-    var showTransactionForm by remember { mutableStateOf<String?>(null) }
+    var showTransactionForm by remember { mutableStateOf<TransactionType?>(null) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var entryForEdit by remember { mutableStateOf<LedgerEntryEntity?>(null) }
     var entryPendingDelete by remember { mutableStateOf<LedgerEntryEntity?>(null) }
@@ -96,7 +97,7 @@ fun CustomerDetailScreen(
 
     val lastPaymentDaysText = remember(transactions) {
         val lastPayment = transactions
-            .filter { it.type.uppercase() == "PAYMENT" }
+            .filter { it.type.uppercase() == TransactionType.PAYMENT.dbValue }
             .maxByOrNull { it.timestamp }
         lastPayment?.let {
             val days = TimeUnit.MILLISECONDS.toDays(System.currentTimeMillis() - it.timestamp)
@@ -108,10 +109,16 @@ fun CustomerDetailScreen(
     if (showTransactionForm != null) {
         TransactionFormScreen(
             customer = selected.customer,
-            transactionType = showTransactionForm!!,
-            onBack = { showTransactionForm = null },
-            onSave = { amount, note, timestamp ->
-                customerViewModel.addLedgerEntry(customerId, showTransactionForm!!, amount, note, timestamp)
+                transactionType = showTransactionForm!!,
+                onBack = { showTransactionForm = null },
+                onSave = { amount, note, timestamp ->
+                    customerViewModel.addLedgerEntry(
+                        customerId,
+                        showTransactionForm!!,
+                        amount,
+                        note,
+                        timestamp
+                    )
                 showTransactionForm = null
             }
         )
@@ -147,7 +154,7 @@ fun CustomerDetailScreen(
                         horizontalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
                         Button(
-                            onClick = { showTransactionForm = "DEBT" },
+                            onClick = { showTransactionForm = TransactionType.DEBT },
                             modifier = Modifier
                                 .weight(1f)
                                 .height(56.dp),
@@ -159,7 +166,7 @@ fun CustomerDetailScreen(
                             Text("記一筆", fontWeight = FontWeight.Bold)
                         }
                         Button(
-                            onClick = { showTransactionForm = "PAYMENT" },
+                            onClick = { showTransactionForm = TransactionType.PAYMENT },
                             modifier = Modifier
                                 .weight(1f)
                                 .height(56.dp),
@@ -441,7 +448,7 @@ fun TransactionItem(
     currencyFormatter: NumberFormat,
     onLongPress: () -> Unit = {}
 ) {
-    val isDebt = transaction.type == "DEBT"
+    val isDebt = transaction.type == TransactionType.DEBT.dbValue
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -560,7 +567,9 @@ fun EditTransactionDialog(
                         )
                     )
                 },
-                colors = ButtonDefaults.buttonColors(containerColor = if (entry.type == "DEBT") DebtColor else PaymentColor)
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (entry.type == TransactionType.DEBT.dbValue) DebtColor else PaymentColor
+                )
             ) {
                 Text("保存")
             }

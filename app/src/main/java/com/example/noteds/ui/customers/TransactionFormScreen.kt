@@ -22,6 +22,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.noteds.data.entity.CustomerEntity
+import com.example.noteds.data.model.PaymentMethod
+import com.example.noteds.data.model.TransactionType
 import com.example.noteds.ui.theme.*
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -31,13 +33,14 @@ import java.util.Locale
 @Composable
 fun TransactionFormScreen(
     customer: CustomerEntity,
-    transactionType: String, // "DEBT" or "PAYMENT"
+    transactionType: TransactionType, // "DEBT" or "PAYMENT"
     onBack: () -> Unit,
     onSave: (Double, String, Long) -> Unit
 ) {
     var amount by remember { mutableStateOf("") }
     var note by remember { mutableStateOf("") }
-    var paymentMethod by remember { mutableStateOf("CASH") } // CASH, TNG, BANK_TRANSFER
+    var paymentMethod by remember { mutableStateOf(PaymentMethod.CASH) }
+    var amountError by remember { mutableStateOf<String?>(null) }
 
     // Date Picker State
     var showDatePicker by remember { mutableStateOf(false) }
@@ -48,10 +51,10 @@ fun TransactionFormScreen(
         dateFormatter.format(Date(it))
     } ?: dateFormatter.format(Date())
 
-    val isDebt = transactionType == "DEBT"
+    val isDebt = transactionType == TransactionType.DEBT
     val primaryColor = if (isDebt) DebtColor else PaymentColor
     val title = if (isDebt) "新增賒賬" else "登記還款"
-    val buttonText = if (isDebt) "確認保存" else "確認保存"
+    val buttonText = "確認保存"
 
     Scaffold(
         topBar = {
@@ -70,8 +73,13 @@ fun TransactionFormScreen(
                 onClick = {
                     val value = amount.toDoubleOrNull()
                     val timestamp = datePickerState.selectedDateMillis ?: System.currentTimeMillis()
-                    val finalNote = if (!isDebt) "$note ($paymentMethod)" else note
-                    if (value != null) onSave(value, finalNote, timestamp)
+                    val finalNote = if (!isDebt) "$note (${paymentMethod.dbValue})" else note
+                    if (value != null && value > 0) {
+                        amountError = null
+                        onSave(value, finalNote, timestamp)
+                    } else {
+                        amountError = "金額必須大於 0"
+                    }
                 },
                 modifier = Modifier
                     .fillMaxWidth()
@@ -133,7 +141,10 @@ fun TransactionFormScreen(
             Text("金額 (RM)", style = MaterialTheme.typography.labelSmall, color = TextSecondary, fontWeight = FontWeight.Bold)
             TextField(
                 value = amount,
-                onValueChange = { amount = it },
+                onValueChange = {
+                    amount = it
+                    amountError = null
+                },
                 textStyle = MaterialTheme.typography.displayLarge.copy(
                     fontSize = 56.sp,
                     fontWeight = FontWeight.Bold,
@@ -158,6 +169,15 @@ fun TransactionFormScreen(
                     )
                 }
             )
+
+            if (amountError != null) {
+                Text(
+                    text = amountError!!,
+                    color = FunctionalRed,
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.align(Alignment.Start)
+                )
+            }
 
             Spacer(modifier = Modifier.height(32.dp))
 
@@ -187,23 +207,23 @@ fun TransactionFormScreen(
                 ) {
                     PaymentMethodOption(
                         label = "現金",
-                        selected = paymentMethod == "CASH",
+                        selected = paymentMethod == PaymentMethod.CASH,
                         color = primaryColor,
-                        onClick = { paymentMethod = "CASH" },
+                        onClick = { paymentMethod = PaymentMethod.CASH },
                         modifier = Modifier.weight(1f)
                     )
                     PaymentMethodOption(
                         label = "TNG",
-                        selected = paymentMethod == "TNG",
+                        selected = paymentMethod == PaymentMethod.TNG,
                         color = primaryColor,
-                        onClick = { paymentMethod = "TNG" },
+                        onClick = { paymentMethod = PaymentMethod.TNG },
                         modifier = Modifier.weight(1f)
                     )
                     PaymentMethodOption(
                         label = "轉賬",
-                        selected = paymentMethod == "BANK_TRANSFER",
+                        selected = paymentMethod == PaymentMethod.BANK_TRANSFER,
                         color = primaryColor,
-                        onClick = { paymentMethod = "BANK_TRANSFER" },
+                        onClick = { paymentMethod = PaymentMethod.BANK_TRANSFER },
                         modifier = Modifier.weight(1f)
                     )
                 }

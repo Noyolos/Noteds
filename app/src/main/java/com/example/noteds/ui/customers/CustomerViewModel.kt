@@ -9,12 +9,12 @@ import androidx.lifecycle.viewModelScope
 import com.example.noteds.data.entity.CustomerEntity
 import com.example.noteds.data.entity.LedgerEntryEntity
 import com.example.noteds.data.model.CustomerWithBalance
+import com.example.noteds.data.model.TransactionType
 import com.example.noteds.data.repository.CustomerRepository
 import com.example.noteds.data.repository.LedgerRepository
 import java.io.File
 import java.io.FileInputStream
 import java.io.InputStream
-import java.util.Locale
 import java.util.UUID
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
@@ -54,13 +54,18 @@ class CustomerViewModel(
         repaymentDate: Long?
     ) {
         viewModelScope.launch {
+            val trimmedName = name.trim()
+            val trimmedPhone = phone.trim()
+            if (trimmedName.isEmpty()) return@launch
+            if (trimmedPhone.isNotEmpty() && !isValidPhone(trimmedPhone)) return@launch
+            val sanitizedInitial = initialDebtAmount?.takeIf { it > 0 }
             val savedProfilePhotos = persistPhotos(profilePhotoUris, "profile")
             val savedPassportPhotos = persistPhotos(passportPhotoUris, "passport")
             val customer = CustomerEntity(
                 code = code,
-                name = name,
-                phone = phone,
-                note = note,
+                name = trimmedName,
+                phone = trimmedPhone,
+                note = note.trim(),
                 profilePhotoUri = savedProfilePhotos.getOrNull(0),
                 profilePhotoUri2 = savedProfilePhotos.getOrNull(1),
                 profilePhotoUri3 = savedProfilePhotos.getOrNull(2),
@@ -68,15 +73,15 @@ class CustomerViewModel(
                 passportPhotoUri2 = savedPassportPhotos.getOrNull(1),
                 passportPhotoUri3 = savedPassportPhotos.getOrNull(2),
                 expectedRepaymentDate = repaymentDate,
-                initialTransactionDone = initialDebtAmount != null && initialDebtAmount > 0
+                initialTransactionDone = sanitizedInitial != null
             )
             val customerId = customerRepository.insertCustomer(customer)
 
-            if (initialDebtAmount != null && initialDebtAmount > 0) {
+            if (sanitizedInitial != null) {
                 val entry = LedgerEntryEntity(
                     customerId = customerId,
-                    type = "DEBT",
-                    amount = initialDebtAmount,
+                    type = TransactionType.DEBT.dbValue,
+                    amount = sanitizedInitial,
                     timestamp = initialDebtDate ?: System.currentTimeMillis(),
                     note = initialDebtNote ?: "Initial Balance"
                 )
@@ -97,6 +102,10 @@ class CustomerViewModel(
     ) {
         viewModelScope.launch {
             val existing = customerRepository.getCustomerById(customerId) ?: return@launch
+            val trimmedName = name.trim()
+            val trimmedPhone = phone.trim()
+            if (trimmedName.isEmpty()) return@launch
+            if (trimmedPhone.isNotEmpty() && !isValidPhone(trimmedPhone)) return@launch
             val savedProfilePhotos = persistPhotos(profilePhotoUris, "profile")
             val savedPassportPhotos = persistPhotos(passportPhotoUris, "passport")
             cleanupReplacedFiles(
@@ -117,9 +126,9 @@ class CustomerViewModel(
             )
             val updated = existing.copy(
                 code = code,
-                name = name,
-                phone = phone,
-                note = note,
+                name = trimmedName,
+                phone = trimmedPhone,
+                note = note.trim(),
                 profilePhotoUri = savedProfilePhotos.getOrNull(0),
                 profilePhotoUri2 = savedProfilePhotos.getOrNull(1),
                 profilePhotoUri3 = savedProfilePhotos.getOrNull(2),
@@ -134,7 +143,21 @@ class CustomerViewModel(
 
     fun deleteCustomer(customerId: Long) {
         viewModelScope.launch {
-            customerRepository.softDeleteCustomerById(customerId)
+            val existing = customerRepository.getCustomerById(customerId) ?: return@launch
+            ledgerRepository.deleteEntriesForCustomer(customerId)
+            removeCustomerFiles(existing)
+
+            val deletedCustomer = existing.copy(
+                isDeleted = true,
+                profilePhotoUri = null,
+                profilePhotoUri2 = null,
+                profilePhotoUri3 = null,
+                idCardPhotoUri = null,
+                passportPhotoUri = null,
+                passportPhotoUri2 = null,
+                passportPhotoUri3 = null
+            )
+            customerRepository.updateCustomer(deletedCustomer)
         }
     }
 
@@ -146,7 +169,8 @@ class CustomerViewModel(
 
     fun updateLedgerEntry(entry: LedgerEntryEntity) {
         viewModelScope.launch {
-            ledgerRepository.updateEntry(entry.copy(type = entry.type.uppercase(Locale.US)))
+            val normalizedType = TransactionType.fromString(entry.type)?.dbValue ?: return@launch
+            ledgerRepository.updateEntry(entry.copy(type = normalizedType))
         }
     }
 
@@ -174,18 +198,19 @@ class CustomerViewModel(
 
     fun addLedgerEntry(
         customerId: Long,
-        type: String,
+        type: TransactionType,
         amount: Double,
         note: String?,
         timestamp: Long = System.currentTimeMillis()
     ) {
         viewModelScope.launch {
+            val sanitizedAmount = amount.takeIf { it > 0 } ?: return@launch
             val entry = LedgerEntryEntity(
                 customerId = customerId,
-                type = type.uppercase(Locale.US),
-                amount = amount,
+                type = type.dbValue,
+                amount = sanitizedAmount,
                 timestamp = timestamp,
-                note = note
+                note = note?.trim()?.takeIf { it.isNotEmpty() }
             )
             ledgerRepository.insertEntry(entry)
         }
@@ -198,6 +223,12 @@ class CustomerViewModel(
             }
             onResult(success)
         }
+    }
+
+    private fun isValidPhone(phone: String): Boolean {
+        val normalized = phone.trim()
+        val pattern = Regex("^[0-9+\\-\\s]{6,20}")
+        return normalized.isEmpty() || pattern.matches(normalized)
     }
 
     private suspend fun persistPhotos(photoUris: List<String?>, prefix: String): List<String?> =
@@ -215,6 +246,27 @@ class CustomerViewModel(
                     oldUri.startsWith(appContext.filesDir.absolutePath)
                 ) {
                     val file = File(oldUri)
+                    if (file.exists()) {
+                        file.delete()
+                    }
+                }
+            }
+        }
+    }
+
+    private suspend fun removeCustomerFiles(customer: CustomerEntity) {
+        withContext(Dispatchers.IO) {
+            listOf(
+                customer.profilePhotoUri,
+                customer.profilePhotoUri2,
+                customer.profilePhotoUri3,
+                customer.idCardPhotoUri,
+                customer.passportPhotoUri,
+                customer.passportPhotoUri2,
+                customer.passportPhotoUri3
+            ).forEach { path ->
+                if (!path.isNullOrBlank() && path.startsWith(appContext.filesDir.absolutePath)) {
+                    val file = File(path)
                     if (file.exists()) {
                         file.delete()
                     }

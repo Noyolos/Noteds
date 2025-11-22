@@ -15,7 +15,7 @@ interface CustomerDao {
     @Query("SELECT * FROM customers WHERE isDeleted = 0 ORDER BY name")
     fun getAllCustomers(): Flow<List<CustomerEntity>>
 
-    @Query("SELECT * FROM customers")
+    @Query("SELECT * FROM customers WHERE isDeleted = 0 ORDER BY name")
     suspend fun getAllCustomersSnapshot(): List<CustomerEntity>
 
     @Query(
@@ -49,4 +49,10 @@ interface CustomerDao {
 
     @Query("DELETE FROM customers WHERE id = :customerId")
     suspend fun deleteCustomerById(customerId: Long)
+
+    @Query("DELETE FROM customers")
+    suspend fun deleteAllCustomers()
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertCustomers(customers: List<CustomerEntity>): List<Long>
 }

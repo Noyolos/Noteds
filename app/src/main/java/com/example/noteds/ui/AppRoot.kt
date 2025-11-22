@@ -1,5 +1,6 @@
 package com.example.noteds.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -10,6 +11,7 @@ import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.PieChart
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -38,11 +40,53 @@ fun AppRoot(
     }
     val selectedIndex = rememberSaveable { mutableIntStateOf(0) }
 
-    // Navigation State
-    var currentScreen by remember { mutableStateOf<Screen>(Screen.Main) }
+    val screenStack = rememberSaveable(
+        saver = listSaver(
+            save = { list ->
+                list.map {
+                    when (it) {
+                        Screen.Main -> mapOf("type" to "main")
+                        Screen.AddCustomer -> mapOf("type" to "add")
+                        is Screen.CustomerDetail -> mapOf("type" to "detail", "id" to it.customerId)
+                        is Screen.EditCustomer -> mapOf("type" to "edit", "id" to it.customerId)
+                    }
+                }
+            },
+            restore = { saved ->
+                saved.mapNotNull {
+                    when (it["type"]) {
+                        "main" -> Screen.Main
+                        "add" -> Screen.AddCustomer
+                        "detail" -> (it["id"] as? Number)?.toLong()?.let(Screen::CustomerDetail)
+                        "edit" -> (it["id"] as? Number)?.toLong()?.let(Screen::EditCustomer)
+                        else -> null
+                    }
+                }
+                    .toMutableList()
+            }
+        )
+    ) { mutableListOf(Screen.Main) }
 
-    // Helper to reset to main
-    fun navigateToMain() { currentScreen = Screen.Main }
+    val currentScreen = screenStack.lastOrNull() ?: Screen.Main
+
+    fun navigateTo(screen: Screen) {
+        if (screen == Screen.Main) {
+            screenStack.clear()
+            screenStack.add(Screen.Main)
+        } else {
+            screenStack.add(screen)
+        }
+    }
+
+    fun navigateBack() {
+        if (screenStack.size > 1) {
+            screenStack.removeLast()
+        }
+    }
+
+    BackHandler(enabled = screenStack.size > 1) {
+        navigateBack()
+    }
 
     when (val screen = currentScreen) {
         is Screen.Main -> {
@@ -52,7 +96,10 @@ fun AppRoot(
                         destinations.forEachIndexed { index, destination ->
                             NavigationBarItem(
                                 selected = selectedIndex.intValue == index,
-                                onClick = { selectedIndex.intValue = index },
+                                onClick = {
+                                    selectedIndex.intValue = index
+                                    navigateTo(Screen.Main)
+                                },
                                 icon = { Icon(destination.icon, contentDescription = null) },
                                 label = { Text(destination.label) },
                                 colors = NavigationBarItemDefaults.colors(
@@ -73,12 +120,16 @@ fun AppRoot(
                     when (selectedIndex.intValue) {
                         0 -> DashboardScreen(
                             reportsViewModel = reportsViewModel,
-                            onCustomerClick = { id -> currentScreen = Screen.CustomerDetail(id) }
+                            onCustomerClick = { id ->
+                                navigateTo(Screen.CustomerDetail(id))
+                            }
                         )
                         1 -> CustomerListScreen(
                             customerViewModel = customerViewModel,
-                            onCustomerClick = { currentScreen = Screen.CustomerDetail(it.customer.id) },
-                            onAddCustomerClick = { currentScreen = Screen.AddCustomer }
+                            onCustomerClick = {
+                                navigateTo(Screen.CustomerDetail(it.customer.id))
+                            },
+                            onAddCustomerClick = { navigateTo(Screen.AddCustomer) }
                         )
                         2 -> ReportsScreen(
                             reportsViewModel = reportsViewModel
@@ -90,24 +141,26 @@ fun AppRoot(
         is Screen.AddCustomer -> {
             AddCustomerScreen(
                 customerViewModel = customerViewModel,
-                onBack = { navigateToMain() },
-                onSaved = { navigateToMain() }
+                onBack = { navigateBack() },
+                onSaved = {
+                    navigateTo(Screen.Main)
+                }
             )
         }
         is Screen.CustomerDetail -> {
             CustomerDetailScreen(
                 customerId = screen.customerId,
                 customerViewModel = customerViewModel,
-                onClose = { navigateToMain() },
-                onEditClick = { id -> currentScreen = Screen.EditCustomer(id) }
+                onClose = { navigateTo(Screen.Main) },
+                onEditClick = { id -> navigateTo(Screen.EditCustomer(id)) }
             )
         }
         is Screen.EditCustomer -> {
             EditCustomerScreen(
                 customerId = screen.customerId,
                 customerViewModel = customerViewModel,
-                onBack = { currentScreen = Screen.CustomerDetail(screen.customerId) },
-                onSaved = { currentScreen = Screen.CustomerDetail(screen.customerId) }
+                onBack = { navigateBack() },
+                onSaved = { navigateTo(Screen.CustomerDetail(screen.customerId)) }
             )
         }
     }

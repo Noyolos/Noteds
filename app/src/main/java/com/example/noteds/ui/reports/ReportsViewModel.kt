@@ -6,8 +6,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.noteds.data.entity.CustomerEntity
 import com.example.noteds.data.entity.LedgerEntryEntity
+import com.example.noteds.data.repository.BackupRepository
 import com.example.noteds.data.repository.CustomerRepository
 import com.example.noteds.data.repository.LedgerRepository
+import com.example.noteds.data.model.TransactionType
 import java.io.File
 import java.io.FileOutputStream
 import java.util.Calendar
@@ -49,6 +51,7 @@ data class AgingData(
 class ReportsViewModel(
     private val customerRepository: CustomerRepository,
     private val ledgerRepository: LedgerRepository,
+    private val backupRepository: BackupRepository,
     private val appContext: Context
 ) : ViewModel() {
 
@@ -89,7 +92,10 @@ class ReportsViewModel(
     val debtThisMonth: StateFlow<Double> = ledgerRepository.getAllEntries()
         .map { entries ->
             val (start, end) = getMonthRange()
-            entries.filter { it.timestamp in start..end && it.type.uppercase() == "DEBT" }
+            entries.filter {
+                it.timestamp in start..end &&
+                    it.type.uppercase() == TransactionType.DEBT.dbValue
+            }
                 .sumOf { it.amount }
         }
         .stateIn(
@@ -101,7 +107,10 @@ class ReportsViewModel(
     val repaymentThisMonth: StateFlow<Double> = ledgerRepository.getAllEntries()
         .map { entries ->
             val (start, end) = getMonthRange()
-            entries.filter { it.timestamp in start..end && it.type.uppercase() == "PAYMENT" }
+            entries.filter {
+                it.timestamp in start..end &&
+                    it.type.uppercase() == TransactionType.PAYMENT.dbValue
+            }
                 .sumOf { it.amount }
         }
         .stateIn(
@@ -145,12 +154,17 @@ class ReportsViewModel(
             val now = System.currentTimeMillis()
             val thirtyDaysAgo = now - 30L * 24 * 60 * 60 * 1000
 
-            val totalDebt = entries.filter { it.type.uppercase() == "DEBT" }.sumOf { it.amount }
-            val totalPayment = entries.filter { it.type.uppercase() == "PAYMENT" }.sumOf { it.amount }
+            val totalDebt = entries.filter { it.type.uppercase() == TransactionType.DEBT.dbValue }
+                .sumOf { it.amount }
+            val totalPayment = entries.filter { it.type.uppercase() == TransactionType.PAYMENT.dbValue }
+                .sumOf { it.amount }
             val outstanding = (totalDebt - totalPayment).coerceAtLeast(0.0)
 
             val recentDebt = entries
-                .filter { it.type.uppercase() == "DEBT" && it.timestamp >= thirtyDaysAgo }
+                .filter {
+                    it.type.uppercase() == TransactionType.DEBT.dbValue &&
+                        it.timestamp >= thirtyDaysAgo
+                }
                 .sumOf { it.amount }
 
             if (recentDebt == 0.0) 0.0 else (outstanding / recentDebt) * 30.0
@@ -194,8 +208,12 @@ class ReportsViewModel(
             val end = calEnd.timeInMillis
 
             val monthEntries = entries.filter { it.timestamp in start..end }
-            val debt = monthEntries.filter { it.type.uppercase() == "DEBT" }.sumOf { it.amount }
-            val payment = monthEntries.filter { it.type.uppercase() == "PAYMENT" }.sumOf { it.amount }
+            val debt = monthEntries
+                .filter { it.type.uppercase() == TransactionType.DEBT.dbValue }
+                .sumOf { it.amount }
+            val payment = monthEntries
+                .filter { it.type.uppercase() == TransactionType.PAYMENT.dbValue }
+                .sumOf { it.amount }
 
             val monthName = String.format(java.util.Locale.US, "%tb", calStart)
             stats.add(0, MonthlyStats(monthName, debt, payment)) // Add to front to have chronological order
@@ -208,10 +226,14 @@ class ReportsViewModel(
     private fun calculateAging(entries: List<LedgerEntryEntity>): List<AgingData> {
         // FIFO Logic
         // 1. Get Total Payments
-        var totalPayments = entries.filter { it.type.uppercase() == "PAYMENT" }.sumOf { it.amount }
+        var totalPayments = entries
+            .filter { it.type.uppercase() == TransactionType.PAYMENT.dbValue }
+            .sumOf { it.amount }
 
         // 2. Get Debts sorted by oldest first
-        val debts = entries.filter { it.type.uppercase() == "DEBT" }.sortedBy { it.timestamp }
+        val debts = entries
+            .filter { it.type.uppercase() == TransactionType.DEBT.dbValue }
+            .sortedBy { it.timestamp }
 
         val now = System.currentTimeMillis()
         val day = 24 * 60 * 60 * 1000L
@@ -262,8 +284,12 @@ class ReportsViewModel(
         for (i in 0..5) {
             val endTime = calendar.timeInMillis
 
-            val debtsUntilNow = entries.filter { it.timestamp <= endTime && it.type.uppercase() == "DEBT" }.sumOf { it.amount }
-            val paymentsUntilNow = entries.filter { it.timestamp <= endTime && it.type.uppercase() == "PAYMENT" }.sumOf { it.amount }
+            val debtsUntilNow = entries
+                .filter { it.timestamp <= endTime && it.type.uppercase() == TransactionType.DEBT.dbValue }
+                .sumOf { it.amount }
+            val paymentsUntilNow = entries
+                .filter { it.timestamp <= endTime && it.type.uppercase() == TransactionType.PAYMENT.dbValue }
+                .sumOf { it.amount }
             val outstanding = (debtsUntilNow - paymentsUntilNow).coerceAtLeast(0.0)
 
             points.add(0, outstanding) // Add to front (oldest first)
@@ -316,8 +342,8 @@ class ReportsViewModel(
                 .mapValues { (_, customerEntries) ->
                     customerEntries.fold(0.0) { acc, entry ->
                         val delta = when (entry.type.uppercase()) {
-                            "DEBT" -> entry.amount
-                            "PAYMENT" -> -entry.amount
+                            TransactionType.DEBT.dbValue -> entry.amount
+                            TransactionType.PAYMENT.dbValue -> -entry.amount
                             else -> 0.0
                         }
                         acc + delta
@@ -398,12 +424,12 @@ class ReportsViewModel(
                         }
                     }
 
-                    customers.forEach { customerRepository.insertCustomer(it) }
-                    entries.forEach { ledgerRepository.insertEntry(it) }
+                    backupRepository.replaceAllData(customers, entries)
 
                     true to "導入完成"
                 } catch (e: Exception) {
-                    false to (e.localizedMessage ?: "導入失敗")
+                    false to ((e.localizedMessage ?: "導入失敗，資料未更動。請確認備份檔案是否完整")
+                        .ifBlank { "導入失敗，資料未更動。請確認備份檔案是否完整" })
                 } finally {
                     tempDir.deleteRecursively()
                 }

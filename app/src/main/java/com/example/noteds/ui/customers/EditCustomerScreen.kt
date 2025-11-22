@@ -45,6 +45,8 @@ fun EditCustomerScreen(
     var name by remember { mutableStateOf(customer.name) }
     var phone by remember { mutableStateOf(customer.phone) }
     var note by remember { mutableStateOf(customer.note) }
+    var nameError by remember { mutableStateOf<String?>(null) }
+    var phoneError by remember { mutableStateOf<String?>(null) }
     val profilePhotos = remember {
         mutableStateListOf(customer.profilePhotoUri, customer.profilePhotoUri2, customer.profilePhotoUri3)
     }
@@ -56,6 +58,12 @@ fun EditCustomerScreen(
         )
     }
     var showDeleteConfirm by remember { mutableStateOf(false) }
+
+    fun validatePhone(input: String): Boolean {
+        val normalized = input.trim()
+        val pattern = Regex("^[0-9+\\-\\s]{6,20}")
+        return normalized.isEmpty() || pattern.matches(normalized)
+    }
 
     Scaffold(
         topBar = {
@@ -72,7 +80,19 @@ fun EditCustomerScreen(
         bottomBar = {
             Button(
                 onClick = {
-                    if (name.isNotBlank()) {
+                    nameError = null
+                    phoneError = null
+                    val trimmedName = name.trim()
+                    val trimmedPhone = phone.trim()
+                    val isNameValid = trimmedName.isNotEmpty()
+                    val isPhoneValid = validatePhone(trimmedPhone)
+                    if (!isNameValid) {
+                        nameError = "姓名必填"
+                    }
+                    if (!isPhoneValid) {
+                        phoneError = "電話格式不正確"
+                    }
+                    if (isNameValid && isPhoneValid) {
                         customerViewModel.updateCustomer(
                             customerId = customerId,
                             code = code,
@@ -135,7 +155,10 @@ fun EditCustomerScreen(
 
                 OutlinedTextField(
                     value = name,
-                    onValueChange = { name = it },
+                    onValueChange = {
+                        name = it
+                        nameError = null
+                    },
                     placeholder = { Text("客戶姓名 *") },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
@@ -146,11 +169,22 @@ fun EditCustomerScreen(
                         unfocusedBorderColor = Color.Transparent
                     ),
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                    isError = nameError != null,
                     textStyle = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold, color = MidnightBlue)
                 )
+                if (nameError != null) {
+                    Text(
+                        text = nameError!!,
+                        color = FunctionalRed,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
                 OutlinedTextField(
                     value = phone,
-                    onValueChange = { phone = it },
+                    onValueChange = {
+                        phone = it
+                        phoneError = null
+                    },
                     placeholder = { Text("電話號碼") },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
@@ -161,8 +195,16 @@ fun EditCustomerScreen(
                         unfocusedBorderColor = Color.Transparent
                     ),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                    isError = phoneError != null,
                     textStyle = MaterialTheme.typography.bodyLarge.copy(color = MidnightBlue)
                 )
+                if (phoneError != null) {
+                    Text(
+                        text = phoneError!!,
+                        color = FunctionalRed,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
             }
 
             PhotoGrid(

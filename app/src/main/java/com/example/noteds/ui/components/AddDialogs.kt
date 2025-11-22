@@ -16,6 +16,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import com.example.noteds.data.model.TransactionType
 
 @Composable
 fun AddCustomerDialog(
@@ -76,13 +77,13 @@ fun AddCustomerDialog(
 
 @Composable
 fun AddLedgerEntryDialog(
-    type: String, // "DEBT" or "PAYMENT"
+    type: TransactionType,
     onDismiss: () -> Unit,
     onConfirm: (amount: Double, note: String) -> Unit
 ) {
     var amountStr by remember { mutableStateOf("") }
     var note by remember { mutableStateOf("") }
-    val title = if (type == "DEBT") "Add Debt Record" else "Record Payment"
+    val title = if (type == TransactionType.DEBT) "Add Debt Record" else "Record Payment"
 
     AlertDialog(
         onDismissRequest = onDismiss,

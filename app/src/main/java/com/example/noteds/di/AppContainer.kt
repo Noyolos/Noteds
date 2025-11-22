@@ -3,6 +3,7 @@ package com.example.noteds.di
 import android.content.Context
 import androidx.room.Room
 import com.example.noteds.data.db.AppDatabase
+import com.example.noteds.data.repository.BackupRepository
 import com.example.noteds.data.repository.CustomerRepository
 import com.example.noteds.data.repository.LedgerRepository
 
@@ -13,7 +14,12 @@ class AppContainer(context: Context) {
         AppDatabase::class.java,
         "noteds-db"
     )
-        .addMigrations(AppDatabase.MIGRATION_4_5)
+        .addMigrations(
+            AppDatabase.MIGRATION_1_5,
+            AppDatabase.MIGRATION_2_5,
+            AppDatabase.MIGRATION_3_5,
+            AppDatabase.MIGRATION_4_5
+        )
         .build()
 
     val customerRepository: CustomerRepository by lazy {
@@ -24,5 +30,13 @@ class AppContainer(context: Context) {
 
     val ledgerRepository: LedgerRepository by lazy {
         LedgerRepository(database.ledgerDao())
+    }
+
+    val backupRepository: BackupRepository by lazy {
+        BackupRepository(
+            database = database,
+            customerDao = database.customerDao(),
+            ledgerDao = database.ledgerDao()
+        )
     }
 }

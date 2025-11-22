@@ -71,6 +71,7 @@ private class ReportsViewModelFactory(
             return ReportsViewModel(
                 customerRepository = appContainer.customerRepository,
                 ledgerRepository = appContainer.ledgerRepository,
+                backupRepository = appContainer.backupRepository,
                 appContext = appContainer.appContext
             ) as T
         }
