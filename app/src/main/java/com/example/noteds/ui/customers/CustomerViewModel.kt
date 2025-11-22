@@ -144,7 +144,6 @@ class CustomerViewModel(
     fun deleteCustomer(customerId: Long) {
         viewModelScope.launch {
             val existing = customerRepository.getCustomerById(customerId) ?: return@launch
-            ledgerRepository.deleteEntriesForCustomer(customerId)
             removeCustomerFiles(existing)
 
             val deletedCustomer = existing.copy(

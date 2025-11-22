@@ -62,10 +62,10 @@ fun AppRoot(
                         else -> null
                     }
                 }
-                    .toMutableList()
+                    .toMutableStateList()
             }
         )
-    ) { mutableListOf(Screen.Main) }
+    ) { mutableStateListOf(Screen.Main) }
 
     val currentScreen = screenStack.lastOrNull() ?: Screen.Main
 
