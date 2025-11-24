@@ -9,7 +9,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -36,10 +36,7 @@ fun EditCustomerScreen(
     val customers by customerViewModel.customersWithBalance.collectAsState()
     val customer = customers.firstOrNull { it.customer.id == customerId }?.customer
 
-    if (customer == null) {
-        // Loading or error
-        return
-    }
+    if (customer == null) { return }
 
     var code by remember { mutableStateOf(customer.code) }
     var name by remember { mutableStateOf(customer.name) }
@@ -47,16 +44,8 @@ fun EditCustomerScreen(
     var note by remember { mutableStateOf(customer.note) }
     var nameError by remember { mutableStateOf<String?>(null) }
     var phoneError by remember { mutableStateOf<String?>(null) }
-    val profilePhotos = remember {
-        mutableStateListOf(customer.profilePhotoUri, customer.profilePhotoUri2, customer.profilePhotoUri3)
-    }
-    val passportPhotos = remember {
-        mutableStateListOf(
-            customer.passportPhotoUri ?: customer.idCardPhotoUri,
-            customer.passportPhotoUri2,
-            customer.passportPhotoUri3
-        )
-    }
+    val profilePhotos = remember { mutableStateListOf(customer.profilePhotoUri, customer.profilePhotoUri2, customer.profilePhotoUri3) }
+    val passportPhotos = remember { mutableStateListOf(customer.passportPhotoUri ?: customer.idCardPhotoUri, customer.passportPhotoUri2, customer.passportPhotoUri3) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
 
     fun validatePhone(input: String): Boolean {
@@ -69,152 +58,46 @@ fun EditCustomerScreen(
         topBar = {
             TopAppBar(
                 title = { Text("編輯客戶", color = TextWhite, fontWeight = FontWeight.Bold) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = TextWhite)
-                    }
-                },
+                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = TextWhite) } },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MidnightBlue)
             )
         },
         bottomBar = {
             Button(
                 onClick = {
-                    nameError = null
-                    phoneError = null
-                    val trimmedName = name.trim()
-                    val trimmedPhone = phone.trim()
-                    val isNameValid = trimmedName.isNotEmpty()
-                    val isPhoneValid = validatePhone(trimmedPhone)
-                    if (!isNameValid) {
-                        nameError = "姓名必填"
-                    }
-                    if (!isPhoneValid) {
-                        phoneError = "電話格式不正確"
-                    }
+                    nameError = null; phoneError = null
+                    val trimmedName = name.trim(); val trimmedPhone = phone.trim()
+                    val isNameValid = trimmedName.isNotEmpty(); val isPhoneValid = validatePhone(trimmedPhone)
+                    if (!isNameValid) nameError = "姓名必填"
+                    if (!isPhoneValid) phoneError = "電話格式不正確"
                     if (isNameValid && isPhoneValid) {
-                        customerViewModel.updateCustomer(
-                            customerId = customerId,
-                            code = code,
-                            name = name,
-                            phone = phone,
-                            note = note,
-                            profilePhotoUris = profilePhotos.toList(),
-                            passportPhotoUris = passportPhotos.toList(),
-                            repaymentDate = customer.expectedRepaymentDate
-                        )
+                        customerViewModel.updateCustomer(customerId = customerId, code = code, name = name, phone = phone, note = note, profilePhotoUris = profilePhotos.toList(), passportPhotoUris = passportPhotos.toList(), repaymentDate = customer.expectedRepaymentDate)
                         onSaved()
                     }
                 },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(24.dp)
-                    .height(56.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = MidnightBlue),
-                shape = RoundedCornerShape(16.dp)
-            ) {
-                Text("保存修改", fontWeight = FontWeight.Bold)
-            }
+                modifier = Modifier.fillMaxWidth().padding(24.dp).height(56.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = MidnightBlue), shape = RoundedCornerShape(16.dp)
+            ) { Text("保存修改", fontWeight = FontWeight.Bold) }
         },
         containerColor = BackgroundColor
     ) { padding ->
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .verticalScroll(rememberScrollState())
-                .padding(24.dp),
+            modifier = Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(24.dp)
         ) {
-            PhotoGrid(
-                title = "頭像照片",
-                subtitle = "可拍照或相冊上傳，最多 3 張",
-                photoUris = profilePhotos,
-                onPhotoChanged = { index, uri -> profilePhotos[index] = uri }
-            )
+            PhotoGrid(title = "頭像照片", subtitle = "可拍照或相冊上傳，最多 3 張", photoUris = profilePhotos, onPhotoChanged = { index, uri -> profilePhotos[index] = uri })
 
-            // Basic Info
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 Text("基本資料", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = TextSecondary)
-
-                OutlinedTextField(
-                    value = code,
-                    onValueChange = { code = it },
-                    placeholder = { Text("客戶編號") },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedContainerColor = CardSurface,
-                        unfocusedContainerColor = CardSurface,
-                        focusedBorderColor = MidnightBlue,
-                        unfocusedBorderColor = Color.Transparent
-                    ),
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
-                    textStyle = MaterialTheme.typography.bodyLarge.copy(color = MidnightBlue)
-                )
-
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = {
-                        name = it
-                        nameError = null
-                    },
-                    placeholder = { Text("客戶姓名 *") },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedContainerColor = CardSurface,
-                        unfocusedContainerColor = CardSurface,
-                        focusedBorderColor = MidnightBlue,
-                        unfocusedBorderColor = Color.Transparent
-                    ),
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
-                    isError = nameError != null,
-                    textStyle = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold, color = MidnightBlue)
-                )
-                if (nameError != null) {
-                    Text(
-                        text = nameError!!,
-                        color = FunctionalRed,
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                }
-                OutlinedTextField(
-                    value = phone,
-                    onValueChange = {
-                        phone = it
-                        phoneError = null
-                    },
-                    placeholder = { Text("電話號碼") },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedContainerColor = CardSurface,
-                        unfocusedContainerColor = CardSurface,
-                        focusedBorderColor = MidnightBlue,
-                        unfocusedBorderColor = Color.Transparent
-                    ),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
-                    isError = phoneError != null,
-                    textStyle = MaterialTheme.typography.bodyLarge.copy(color = MidnightBlue)
-                )
-                if (phoneError != null) {
-                    Text(
-                        text = phoneError!!,
-                        color = FunctionalRed,
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                }
+                OutlinedTextField(value = code, onValueChange = { code = it }, placeholder = { Text("客戶編號") }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp), colors = OutlinedTextFieldDefaults.colors(focusedContainerColor = CardSurface, unfocusedContainerColor = CardSurface, focusedBorderColor = MidnightBlue, unfocusedBorderColor = Color.Transparent), keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next), textStyle = MaterialTheme.typography.bodyLarge.copy(color = MidnightBlue))
+                OutlinedTextField(value = name, onValueChange = { name = it; nameError = null }, placeholder = { Text("客戶姓名 *") }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp), colors = OutlinedTextFieldDefaults.colors(focusedContainerColor = CardSurface, unfocusedContainerColor = CardSurface, focusedBorderColor = MidnightBlue, unfocusedBorderColor = Color.Transparent), keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next), isError = nameError != null, textStyle = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold, color = MidnightBlue))
+                if (nameError != null) Text(text = nameError!!, color = FunctionalRed, style = MaterialTheme.typography.bodyMedium)
+                OutlinedTextField(value = phone, onValueChange = { phone = it; phoneError = null }, placeholder = { Text("電話號碼") }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp), colors = OutlinedTextFieldDefaults.colors(focusedContainerColor = CardSurface, unfocusedContainerColor = CardSurface, focusedBorderColor = MidnightBlue, unfocusedBorderColor = Color.Transparent), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone), isError = phoneError != null, textStyle = MaterialTheme.typography.bodyLarge.copy(color = MidnightBlue))
+                if (phoneError != null) Text(text = phoneError!!, color = FunctionalRed, style = MaterialTheme.typography.bodyMedium)
             }
 
-            PhotoGrid(
-                title = "證件照片",
-                subtitle = "護照 / 證件最多 3 張",
-                photoUris = passportPhotos,
-                onPhotoChanged = { index, uri -> passportPhotos[index] = uri }
-            )
+            PhotoGrid(title = "證件照片", subtitle = "護照 / 證件最多 3 張", photoUris = passportPhotos, onPhotoChanged = { index, uri -> passportPhotos[index] = uri })
 
-            // Delete Button
             OutlinedButton(
                 onClick = { showDeleteConfirm = true },
                 modifier = Modifier.fillMaxWidth().height(56.dp),
@@ -229,26 +112,21 @@ fun EditCustomerScreen(
         }
 
         if (showDeleteConfirm) {
-             AlertDialog(
+            AlertDialog(
                 onDismissRequest = { showDeleteConfirm = false },
                 title = { Text("確定要刪除嗎？") },
                 text = { Text("此操作將永久刪除 ${customer.name} 及其所有交易記錄。") },
                 confirmButton = {
                     Button(
                         onClick = {
-                            customerViewModel.deleteCustomer(customerId)
+                            // --- 修复：传入对象 ---
+                            customerViewModel.deleteCustomer(customer)
                             onSaved()
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = FunctionalRed)
-                    ) {
-                        Text("確認刪除")
-                    }
+                    ) { Text("確認刪除") }
                 },
-                dismissButton = {
-                    TextButton(onClick = { showDeleteConfirm = false }) {
-                        Text("取消")
-                    }
-                }
+                dismissButton = { TextButton(onClick = { showDeleteConfirm = false }) { Text("取消") } }
             )
         }
     }

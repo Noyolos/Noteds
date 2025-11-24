@@ -64,6 +64,8 @@ dependencies {
     debugImplementation("androidx.compose.ui:ui-test-manifest")
 
     implementation("androidx.activity:activity-compose:1.9.0")
+    // --- 修复：添加 activity-ktx 以支持 'by viewModels' ---
+    implementation("androidx.activity:activity-ktx:1.9.0")
     implementation("androidx.navigation:navigation-compose:2.8.0")
 
     implementation("androidx.room:room-runtime:2.8.3")
@@ -78,6 +80,9 @@ dependencies {
     implementation("com.google.accompanist:accompanist-permissions:0.37.3")
 
     implementation("com.google.android.material:material:1.12.0")
+
+    // Gson for Backup
+    implementation("com.google.code.gson:gson:2.10.1")
 
     // Unit Testing
     testImplementation("junit:junit:4.13.2")

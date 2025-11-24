@@ -19,6 +19,7 @@ class MainActivity : ComponentActivity() {
 
     private val appContainer by lazy { (application as NotedsApp).container }
 
+    // 这里使用了 activity-ktx 提供的 viewModels 委托
     private val customerViewModel: CustomerViewModel by viewModels {
         CustomerViewModelFactory(appContainer)
     }
@@ -55,6 +56,7 @@ private class CustomerViewModelFactory(
             return CustomerViewModel(
                 customerRepository = appContainer.customerRepository,
                 ledgerRepository = appContainer.ledgerRepository,
+                backupRepository = appContainer.backupRepository, // 修复：传入 BackupRepository
                 appContext = appContainer.appContext
             ) as T
         }

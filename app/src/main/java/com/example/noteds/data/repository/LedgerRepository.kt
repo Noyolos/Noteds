@@ -9,6 +9,7 @@ class LedgerRepository(
 ) {
     fun getAllEntries(): Flow<List<LedgerEntryEntity>> = ledgerDao.getAllEntries()
 
+    // --- 确保包含此方法 ---
     suspend fun getAllEntriesSnapshot(): List<LedgerEntryEntity> = ledgerDao.getAllEntriesSnapshot()
 
     fun getEntriesForCustomer(customerId: Long): Flow<List<LedgerEntryEntity>> =

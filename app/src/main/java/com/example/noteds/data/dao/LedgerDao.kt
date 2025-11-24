@@ -32,14 +32,8 @@ interface LedgerDao {
     )
     fun getAllEntries(): Flow<List<LedgerEntryEntity>>
 
-    @Query(
-        """
-        SELECT le.*
-        FROM ledger_entries le
-        INNER JOIN customers c ON c.id = le.customerId
-        WHERE c.isDeleted = 0
-        """
-    )
+    // --- 修改：使用简单的全量查询，用于备份 ---
+    @Query("SELECT * FROM ledger_entries")
     suspend fun getAllEntriesSnapshot(): List<LedgerEntryEntity>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)

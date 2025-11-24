@@ -23,15 +23,24 @@ class CustomerRepository(
 
     suspend fun softDeleteCustomerById(customerId: Long) = customerDao.softDeleteCustomerById(customerId)
 
+    // 确保包含此方法 (级联删除需要)
+    suspend fun getSubordinatesSnapshot(parentId: Long): List<CustomerEntity> =
+        customerDao.getSubordinatesSnapshot(parentId)
+
+    // 释放下属 (备用)
+    suspend fun releaseSubordinates(parentId: Long) = customerDao.releaseSubordinates(parentId)
+
     suspend fun getCustomerById(customerId: Long): CustomerEntity? = customerDao.getCustomerById(customerId)
 
     fun getCustomersWithBalance(): Flow<List<CustomerWithBalance>> =
         customerDao.getCustomersWithBalance()
 
-    fun getCustomersByParent(parentId: Long?): Flow<List<CustomerWithBalance>> =
-        if (parentId == null) {
+    // 确保这里调用的是 customerDao.getRootCustomersWithBalance()
+    fun getCustomersByParent(parentId: Long?): Flow<List<CustomerWithBalance>> {
+        return if (parentId == null) {
             customerDao.getRootCustomersWithBalance()
         } else {
             customerDao.getSubordinatesWithBalance(parentId)
         }
+    }
 }
