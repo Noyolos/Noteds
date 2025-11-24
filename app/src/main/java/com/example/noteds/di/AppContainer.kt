@@ -18,7 +18,8 @@ class AppContainer(context: Context) {
             AppDatabase.MIGRATION_1_5,
             AppDatabase.MIGRATION_2_5,
             AppDatabase.MIGRATION_3_5,
-            AppDatabase.MIGRATION_4_5
+            AppDatabase.MIGRATION_4_5,
+            AppDatabase.MIGRATION_5_6
         )
         .build()
 

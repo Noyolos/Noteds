@@ -9,8 +9,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -22,6 +24,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import com.example.noteds.data.entity.CustomerEntity
 import com.example.noteds.data.model.CustomerWithBalance
 import com.example.noteds.ui.theme.*
 import java.text.NumberFormat
@@ -31,12 +34,19 @@ import java.util.Locale
 @Composable
 fun CustomerListScreen(
     customerViewModel: CustomerViewModel,
+    parentId: Long? = null,
     modifier: Modifier = Modifier,
     onCustomerClick: (CustomerWithBalance) -> Unit = {},
-    onAddCustomerClick: () -> Unit
+    onGroupClick: (CustomerWithBalance) -> Unit = {},
+    onAddCustomerClick: () -> Unit,
+    onViewHeadDetail: (() -> Unit)? = null,
+    onBack: (() -> Unit)? = null
 ) {
-    val customers by customerViewModel.customersWithBalance.collectAsState()
+    val customers by customerViewModel.getCustomers(parentId).collectAsState(initial = emptyList())
     val currencyFormatter = remember { NumberFormat.getCurrencyInstance(Locale.getDefault()) }
+    val groupHead by produceState(initialValue = null as CustomerEntity?, parentId) {
+        value = parentId?.let { customerViewModel.getCustomer(it) }
+    }
 
     var searchQuery by remember { mutableStateOf("") }
 
@@ -53,62 +63,131 @@ fun CustomerListScreen(
 
     Scaffold(
         topBar = {
-            // Custom Header matching HTML
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(MidnightBlue)
-                    .statusBarsPadding()
-                    .padding(bottom = 24.dp)
-                    .clip(RoundedCornerShape(bottomStart = 30.dp, bottomEnd = 30.dp))
-            ) {
-                Box(
+            if (parentId == null) {
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 16.dp),
-                    contentAlignment = Alignment.Center
+                        .background(MidnightBlue)
+                        .statusBarsPadding()
+                        .padding(bottom = 24.dp)
+                        .clip(RoundedCornerShape(bottomStart = 30.dp, bottomEnd = 30.dp))
                 ) {
-                    Text(
-                        text = "客戶名錄",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = TextWhite
-                    )
-                }
-
-                // Search Bar inside Header
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 24.dp)
-                ) {
-                    TextField(
-                        value = searchQuery,
-                        onValueChange = { searchQuery = it },
-                        placeholder = { Text("搜尋姓名或電話...", color = TextWhite.copy(alpha = 0.5f)) },
-                        leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = TextWhite) },
-                        trailingIcon = if (searchQuery.isNotEmpty()) {
-                            {
-                                IconButton(onClick = { searchQuery = "" }) {
-                                    Icon(Icons.Default.Close, contentDescription = null, tint = TextWhite)
-                                }
-                            }
-                        } else null,
+                    Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(Color.White.copy(alpha = 0.1f)),
-                        colors = TextFieldDefaults.colors(
-                            focusedContainerColor = Color.Transparent,
-                            unfocusedContainerColor = Color.Transparent,
-                            focusedTextColor = TextWhite,
-                            unfocusedTextColor = TextWhite,
-                            focusedIndicatorColor = Color.Transparent,
-                            unfocusedIndicatorColor = Color.Transparent,
-                            cursorColor = TextWhite
-                        ),
-                        singleLine = true
+                            .padding(vertical = 16.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "客戶名錄",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = TextWhite
+                        )
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 24.dp)
+                    ) {
+                        TextField(
+                            value = searchQuery,
+                            onValueChange = { searchQuery = it },
+                            placeholder = { Text("搜尋姓名或電話...", color = TextWhite.copy(alpha = 0.5f)) },
+                            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = TextWhite) },
+                            trailingIcon = if (searchQuery.isNotEmpty()) {
+                                {
+                                    IconButton(onClick = { searchQuery = "" }) {
+                                        Icon(Icons.Default.Close, contentDescription = null, tint = TextWhite)
+                                    }
+                                }
+                            } else null,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(Color.White.copy(alpha = 0.1f)),
+                            colors = TextFieldDefaults.colors(
+                                focusedContainerColor = Color.Transparent,
+                                unfocusedContainerColor = Color.Transparent,
+                                focusedTextColor = TextWhite,
+                                unfocusedTextColor = TextWhite,
+                                focusedIndicatorColor = Color.Transparent,
+                                unfocusedIndicatorColor = Color.Transparent,
+                                cursorColor = TextWhite
+                            ),
+                            singleLine = true
+                        )
+                    }
+                }
+            } else {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(MidnightBlue)
+                        .statusBarsPadding()
+                        .clip(RoundedCornerShape(bottomStart = 30.dp, bottomEnd = 30.dp))
+                ) {
+                    TopAppBar(
+                        title = {
+                            Text(
+                                text = groupHead?.name ?: "群組", // Group name
+                                color = TextWhite,
+                                fontWeight = FontWeight.Bold
+                            )
+                        },
+                        navigationIcon = {
+                            IconButton(onClick = { onBack?.invoke() }) {
+                                Icon(
+                                    Icons.Default.ArrowBack,
+                                    contentDescription = "Back",
+                                    tint = TextWhite
+                                )
+                            }
+                        },
+                        actions = {
+                            onViewHeadDetail?.let {
+                                TextButton(onClick = it) {
+                                    Text("查看頭檔案", color = TextWhite)
+                                }
+                            }
+                        },
+                        colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
                     )
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 24.dp, vertical = 8.dp)
+                    ) {
+                        TextField(
+                            value = searchQuery,
+                            onValueChange = { searchQuery = it },
+                            placeholder = { Text("搜尋姓名或電話...", color = TextWhite.copy(alpha = 0.5f)) },
+                            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = TextWhite) },
+                            trailingIcon = if (searchQuery.isNotEmpty()) {
+                                {
+                                    IconButton(onClick = { searchQuery = "" }) {
+                                        Icon(Icons.Default.Close, contentDescription = null, tint = TextWhite)
+                                    }
+                                }
+                            } else null,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(Color.White.copy(alpha = 0.1f)),
+                            colors = TextFieldDefaults.colors(
+                                focusedContainerColor = Color.Transparent,
+                                unfocusedContainerColor = Color.Transparent,
+                                focusedTextColor = TextWhite,
+                                unfocusedTextColor = TextWhite,
+                                focusedIndicatorColor = Color.Transparent,
+                                unfocusedIndicatorColor = Color.Transparent,
+                                cursorColor = TextWhite
+                            ),
+                            singleLine = true
+                        )
+                    }
                 }
             }
         },
@@ -136,10 +215,16 @@ fun CustomerListScreen(
                 items = filteredCustomers,
                 key = { it.customer.id }
             ) { item ->
+                val onClick = if (item.customer.isGroup) {
+                    { onGroupClick(item) }
+                } else {
+                    { onCustomerClick(item) }
+                }
                 CustomerCard(
                     item = item,
                     formatter = currencyFormatter,
-                    onClick = { onCustomerClick(item) }
+                    onClick = onClick,
+                    isGroup = item.customer.isGroup
                 )
             }
         }
@@ -150,7 +235,8 @@ fun CustomerListScreen(
 fun CustomerCard(
     item: CustomerWithBalance,
     formatter: NumberFormat,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    isGroup: Boolean = false
 ) {
     Card(
         modifier = Modifier
@@ -196,6 +282,15 @@ fun CustomerCard(
 
             Column(modifier = Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (isGroup) {
+                        Icon(
+                            Icons.Default.Folder,
+                            contentDescription = null,
+                            tint = MidnightBlue,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                    }
                     Text(
                         text = item.customer.name,
                         style = MaterialTheme.typography.titleMedium,

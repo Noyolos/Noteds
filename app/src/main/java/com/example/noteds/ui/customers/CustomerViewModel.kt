@@ -41,6 +41,11 @@ class CustomerViewModel(
                 initialValue = emptyList()
             )
 
+    fun getCustomers(parentId: Long?): Flow<List<CustomerWithBalance>> =
+        customerRepository.getCustomersByParent(parentId)
+
+    suspend fun getCustomer(id: Long): CustomerEntity? = customerRepository.getCustomerById(id)
+
     fun addCustomer(
         code: String,
         name: String,
@@ -51,7 +56,9 @@ class CustomerViewModel(
         initialDebtAmount: Double?,
         initialDebtNote: String?,
         initialDebtDate: Long?,
-        repaymentDate: Long?
+        repaymentDate: Long?,
+        parentId: Long? = null,
+        isGroup: Boolean = false
     ) {
         viewModelScope.launch {
             val trimmedName = name.trim()
@@ -73,6 +80,8 @@ class CustomerViewModel(
                 passportPhotoUri2 = savedPassportPhotos.getOrNull(1),
                 passportPhotoUri3 = savedPassportPhotos.getOrNull(2),
                 expectedRepaymentDate = repaymentDate,
+                parentId = parentId,
+                isGroup = isGroup,
                 initialTransactionDone = sanitizedInitial != null
             )
             val customerId = customerRepository.insertCustomer(customer)

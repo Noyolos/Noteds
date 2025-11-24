@@ -27,4 +27,11 @@ class CustomerRepository(
 
     fun getCustomersWithBalance(): Flow<List<CustomerWithBalance>> =
         customerDao.getCustomersWithBalance()
+
+    fun getCustomersByParent(parentId: Long?): Flow<List<CustomerWithBalance>> =
+        if (parentId == null) {
+            customerDao.getRootCustomersWithBalance()
+        } else {
+            customerDao.getSubordinatesWithBalance(parentId)
+        }
 }

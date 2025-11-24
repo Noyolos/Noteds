@@ -27,7 +27,8 @@ import com.example.noteds.ui.theme.*
 fun AddCustomerScreen(
     customerViewModel: CustomerViewModel,
     onBack: () -> Unit,
-    onSaved: () -> Unit
+    onSaved: () -> Unit,
+    parentId: Long? = null
 ) {
     var code by remember { mutableStateOf("") }
     var name by remember { mutableStateOf("") }
@@ -39,6 +40,7 @@ fun AddCustomerScreen(
     var initialAmountError by remember { mutableStateOf<String?>(null) }
     val profilePhotos = remember { mutableStateListOf<String?>(null, null, null) }
     val passportPhotos = remember { mutableStateListOf<String?>(null, null, null) }
+    var isGroup by remember(parentId) { mutableStateOf(false) }
 
     fun validatePhone(input: String): Boolean {
         val normalized = input.trim()
@@ -97,7 +99,9 @@ fun AddCustomerScreen(
                             initialDebtAmount = initialAmount.toDoubleOrNull(),
                             initialDebtNote = "初始欠款",
                             initialDebtDate = System.currentTimeMillis(),
-                            repaymentDate = null // Optional
+                            repaymentDate = null, // Optional
+                            parentId = parentId,
+                            isGroup = if (parentId == null) isGroup else false
                         )
                         onSaved()
                     }
@@ -200,6 +204,28 @@ fun AddCustomerScreen(
                         color = FunctionalRed,
                         style = MaterialTheme.typography.bodyMedium
                     )
+                }
+
+                if (parentId == null) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Checkbox(
+                            checked = isGroup,
+                            onCheckedChange = { isGroup = it },
+                            colors = CheckboxDefaults.colors(
+                                checkedColor = MidnightBlue,
+                                uncheckedColor = TextSecondary
+                            )
+                        )
+                        Text(
+                            text = "設為群組頭", // Set as Group Head
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MidnightBlue,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
             }
 

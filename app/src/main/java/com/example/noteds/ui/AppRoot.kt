@@ -97,10 +97,14 @@ fun AppRoot(
                         )
                         1 -> CustomerListScreen(
                             customerViewModel = customerViewModel,
+                            parentId = null,
                             onCustomerClick = {
                                 navigateTo(Screen.CustomerDetail(it.customer.id))
                             },
-                            onAddCustomerClick = { navigateTo(Screen.AddCustomer) }
+                            onGroupClick = {
+                                navigateTo(Screen.GroupList(it.customer.id))
+                            },
+                            onAddCustomerClick = { navigateTo(Screen.AddCustomer(null)) }
                         )
                         2 -> ReportsScreen(
                             reportsViewModel = reportsViewModel
@@ -114,8 +118,30 @@ fun AppRoot(
                 customerViewModel = customerViewModel,
                 onBack = { navigateBack() },
                 onSaved = {
-                    navigateTo(Screen.Main)
-                }
+                    if (screen.parentId != null) {
+                        navigateBack()
+                    } else {
+                        navigateTo(Screen.Main)
+                    }
+                },
+                parentId = screen.parentId
+            )
+        }
+        is Screen.GroupList -> {
+            CustomerListScreen(
+                customerViewModel = customerViewModel,
+                parentId = screen.groupCustomerId,
+                onCustomerClick = {
+                    navigateTo(Screen.CustomerDetail(it.customer.id))
+                },
+                onGroupClick = {
+                    navigateTo(Screen.GroupList(it.customer.id))
+                },
+                onAddCustomerClick = { navigateTo(Screen.AddCustomer(screen.groupCustomerId)) },
+                onViewHeadDetail = {
+                    navigateTo(Screen.CustomerDetail(screen.groupCustomerId))
+                },
+                onBack = { navigateBack() }
             )
         }
         is Screen.CustomerDetail -> {
@@ -139,7 +165,8 @@ fun AppRoot(
 
 sealed class Screen {
     object Main : Screen()
-    object AddCustomer : Screen()
+    data class AddCustomer(val parentId: Long?) : Screen()
+    data class GroupList(val groupCustomerId: Long) : Screen()
     data class CustomerDetail(val customerId: Long) : Screen()
     data class EditCustomer(val customerId: Long) : Screen()
 }

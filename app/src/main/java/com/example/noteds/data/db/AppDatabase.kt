@@ -11,7 +11,7 @@ import com.example.noteds.data.entity.LedgerEntryEntity
 
 @Database(
     entities = [CustomerEntity::class, LedgerEntryEntity::class],
-    version = 5,
+    version = 6,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -178,6 +178,16 @@ abstract class AppDatabase : RoomDatabase() {
         val MIGRATION_4_5 = object : Migration(4, 5) {
             override fun migrate(database: SupportSQLiteDatabase) {
                 migrateToVersion5(database)
+            }
+        }
+
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("ALTER TABLE customers ADD COLUMN parentId INTEGER DEFAULT NULL")
+                database.execSQL("ALTER TABLE customers ADD COLUMN isGroup INTEGER NOT NULL DEFAULT 0")
+                database.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_customers_parentId ON customers(parentId)"
+                )
             }
         }
     }
