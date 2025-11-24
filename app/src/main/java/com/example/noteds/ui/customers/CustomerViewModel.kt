@@ -41,6 +41,15 @@ class CustomerViewModel(
         .setPrettyPrinting()
         .create()
 
+    // --- 新增：获取所有文件夹列表，用于移动功能的下拉选择 ---
+    val allFolders: StateFlow<List<CustomerEntity>> = customerRepository.getAllCustomers()
+        .map { list -> list.filter { it.isGroup && !it.isDeleted } }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000),
+            initialValue = emptyList()
+        )
+
     fun getTransactionsForCustomer(customerId: Long): Flow<List<LedgerEntryEntity>> =
         ledgerRepository.getEntriesForCustomer(customerId)
 
@@ -54,36 +63,26 @@ class CustomerViewModel(
             )
 
     // --- 核心逻辑：获取列表并计算文件夹总金额 ---
-    // 这个方法会根据 parentId 筛选，如果是文件夹，会自动累加其下属的金额
     fun getCustomers(parentId: Long?): Flow<List<CustomerWithBalance>> {
         return customersWithBalance.map { all ->
-            // 1. 构建映射：ParentId -> List of Children
-            // 这样我们可以快速找到任何一个 ID 下面的所有子项
             val childrenMap = all.groupBy { it.customer.parentId }
-
-            // 2. 递归函数计算每个 ID 的总金额 (Debt, Payment)
-            // 使用缓存避免重复计算
             val computedSums = mutableMapOf<Long, Pair<Double, Double>>()
 
             fun computeSum(id: Long): Pair<Double, Double> {
                 if (computedSums.containsKey(id)) return computedSums[id]!!
 
                 val children = childrenMap[id] ?: emptyList()
-                // 如果没有子项，总金额就是 0
                 if (children.isEmpty()) return 0.0 to 0.0
 
                 var debt = 0.0
                 var payment = 0.0
 
-                // 累加所有子项
                 children.forEach { child ->
                     if (child.customer.isGroup) {
-                        // 如果子项也是文件夹，递归计算
                         val (d, p) = computeSum(child.customer.id)
                         debt += d
                         payment += p
                     } else {
-                        // 如果是普通客户，直接加它的余额
                         debt += child.totalDebt
                         payment += child.totalPayment
                     }
@@ -92,15 +91,12 @@ class CustomerViewModel(
                 return debt to payment
             }
 
-            // 3. 筛选当前层级，并更新文件夹的显示金额
             val currentLevelItems = all.filter { it.customer.parentId == parentId }
-                .sortedByDescending { it.customer.isGroup } // 文件夹排在前面
+                .sortedByDescending { it.customer.isGroup }
 
             currentLevelItems.map { item ->
                 if (item.customer.isGroup) {
-                    // 计算该文件夹内部所有人的总和
                     val (d, p) = computeSum(item.customer.id)
-                    // 更新 item 的金额字段 (仅用于显示)
                     item.copy(totalDebt = d, totalPayment = p)
                 } else {
                     item
@@ -112,25 +108,30 @@ class CustomerViewModel(
     suspend fun getCustomer(id: Long): CustomerEntity? =
         customerRepository.getCustomerById(id)
 
-    // --- 功能：创建文件夹 ---
+    // --- 新增：移动客户/文件夹 ---
+    fun moveCustomer(customer: CustomerEntity, newParentId: Long?) {
+        viewModelScope.launch {
+            // 防止将文件夹移动到自己内部（简单检查：目标 ID 不能等于自己 ID）
+            if (customer.id == newParentId) return@launch
+
+            val updated = customer.copy(parentId = newParentId)
+            customerRepository.updateCustomer(updated)
+        }
+    }
+
     fun createFolder(name: String, parentId: Long?) {
         viewModelScope.launch {
             if (name.isBlank()) return@launch
             val folder = CustomerEntity(
                 name = name.trim(),
-                isGroup = true, // 关键标记
+                isGroup = true,
                 parentId = parentId,
-                // 其他字段给空值
-                code = "",
-                phone = "",
-                note = "",
-                initialTransactionDone = true
+                code = "", phone = "", note = "", initialTransactionDone = true
             )
             customerRepository.insertCustomer(folder)
         }
     }
 
-    // --- 功能：添加客户 ---
     fun addCustomer(
         code: String,
         name: String,
@@ -143,7 +144,7 @@ class CustomerViewModel(
         initialDebtDate: Long?,
         repaymentDate: Long?,
         parentId: Long? = null,
-        isGroup: Boolean = false // 默认 false
+        isGroup: Boolean = false
     ) {
         viewModelScope.launch {
             val trimmedName = name.trim()
@@ -185,29 +186,23 @@ class CustomerViewModel(
         }
     }
 
-    // --- 功能：级联删除 (删除文件夹时连同内部客户一起删除) ---
     fun deleteCustomer(customer: CustomerEntity) {
         viewModelScope.launch {
             deleteCustomerRecursive(customer)
         }
     }
 
-    // 递归删除逻辑
     private suspend fun deleteCustomerRecursive(target: CustomerEntity) {
-        // 1. 如果是文件夹，先查找并删除所有直接下属
         if (target.isGroup) {
-            // 需要在 CustomerRepository/Dao 中实现 getSubordinatesSnapshot
             val children = customerRepository.getSubordinatesSnapshot(target.id)
             children.forEach { child ->
-                deleteCustomerRecursive(child) // 递归：如果子项也是文件夹，继续深层删除
+                deleteCustomerRecursive(child)
             }
         }
 
-        // 2. 删除目标本身 (文件、账目、软删除)
         ledgerRepository.deleteEntriesForCustomer(target.id)
         removeCustomerFiles(target)
 
-        // 软删除
         val deletedTarget = target.copy(
             isDeleted = true,
             profilePhotoUri = null,
@@ -221,20 +216,14 @@ class CustomerViewModel(
         customerRepository.updateCustomer(deletedTarget)
     }
 
-    // --- 功能：导出备份 (修复版) ---
     fun exportBackup(file: File, onSuccess: () -> Unit, onError: (String) -> Unit) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                // 获取所有数据快照
                 val customers = customerRepository.getAllCustomersSnapshot()
                 val entries = ledgerRepository.getAllEntriesSnapshot()
-
-                // 使用 BackupData 封装，确保 JSON 结构包含 parentId 和 isGroup
                 val backupData = BackupData(customers = customers, entries = entries)
-
                 val json = gson.toJson(backupData)
                 FileWriter(file).use { it.write(json) }
-
                 withContext(Dispatchers.Main) { onSuccess() }
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) { onError(e.message ?: "Export Failed") }
@@ -242,18 +231,12 @@ class CustomerViewModel(
         }
     }
 
-    // --- 功能：导入备份 (修复版) ---
     fun importBackup(file: File, onSuccess: () -> Unit, onError: (String) -> Unit) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val json = file.readText()
                 val backupData = gson.fromJson(json, BackupData::class.java)
-
-                // BackupRepository 会清空旧数据并插入新数据
-                // 因为 backupData.customers 是从包含 parentId/isGroup 的 JSON 解析出来的
-                // 所以插入数据库时这些字段会被正确恢复
                 backupRepository.replaceAllData(backupData.customers, backupData.entries)
-
                 withContext(Dispatchers.Main) { onSuccess() }
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) { onError(e.message ?: "Import Failed") }

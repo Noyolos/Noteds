@@ -298,6 +298,20 @@ fun PhotoGrid(
                 TextButton(onClick = { galleryLauncher.launch("image/*") }) {
                     Text("從相冊選擇")
                 }
+
+                // --- 新增：移除照片按钮 ---
+                if (slots[selectedIndex] != null) {
+                    TextButton(onClick = {
+                        onPhotoChanged(selectedIndex, null)
+                        coroutineScope.launch { sheetState.hide() }.invokeOnCompletion {
+                            showSheet = false
+                        }
+                    }) {
+                        Text("移除照片", color = MaterialTheme.colorScheme.error)
+                    }
+                }
+                // -----------------------
+
                 TextButton(onClick = {
                     coroutineScope.launch { sheetState.hide() }.invokeOnCompletion {
                         showSheet = false

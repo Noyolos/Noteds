@@ -1,7 +1,9 @@
 package com.example.noteds.ui.customers
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -9,12 +11,13 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack // 修复：使用 AutoMirrored
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CreateNewFolder
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DriveFileMove
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
@@ -45,6 +48,10 @@ fun CustomerListScreen(
 ) {
     val customersFlow = remember(parentId) { customerViewModel.getCustomers(parentId) }
     val customers by customersFlow.collectAsState(initial = emptyList())
+
+    // --- 新增：获取所有文件夹，用于移动功能 ---
+    val allFolders by customerViewModel.allFolders.collectAsState()
+
     val currencyFormatter = remember { NumberFormat.getCurrencyInstance(Locale.getDefault()) }
 
     var searchQuery by remember { mutableStateOf("") }
@@ -99,7 +106,6 @@ fun CustomerListScreen(
                 ) {
                     if (onBack != null) {
                         IconButton(onClick = onBack) {
-                            // 修复：使用 AutoMirrored
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = TextWhite)
                         }
                     } else {
@@ -175,8 +181,13 @@ fun CustomerListScreen(
                 CustomerCard(
                     item = item,
                     formatter = currencyFormatter,
+                    allFolders = allFolders, // 传入所有文件夹列表
+                    currentParentId = parentId,
                     onClick = { onCustomerClick(item) },
-                    onDelete = { customerViewModel.deleteCustomer(item.customer) }
+                    onDelete = { customerViewModel.deleteCustomer(item.customer) },
+                    onMove = { targetFolderId ->
+                        customerViewModel.moveCustomer(item.customer, targetFolderId)
+                    }
                 )
             }
         }
@@ -212,16 +223,124 @@ fun CreateFolderDialog(onDismiss: () -> Unit, onConfirm: (String) -> Unit) {
     )
 }
 
+@Composable
+fun MoveToFolderDialog(
+    allFolders: List<CustomerEntity>,
+    currentParentId: Long?,
+    onDismiss: () -> Unit,
+    onFolderSelected: (Long?) -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("移動到...", fontWeight = FontWeight.Bold, color = MidnightBlue) },
+        text = {
+            LazyColumn(
+                modifier = Modifier.heightIn(max = 300.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                // 选项：移动到最外层（根目录）
+                if (currentParentId != null) {
+                    item {
+                        FolderItem(name = "根目錄 (最外層)", onClick = { onFolderSelected(null) })
+                    }
+                }
+
+                // 选项：其他文件夹
+                items(allFolders) { folder ->
+                    // 不显示当前所在的文件夹
+                    if (folder.id != currentParentId) {
+                        FolderItem(name = folder.name, onClick = { onFolderSelected(folder.id) })
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("取消") }
+        },
+        containerColor = CardSurface,
+        shape = RoundedCornerShape(16.dp)
+    )
+}
+
+@Composable
+fun FolderItem(name: String, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .clickable(onClick = onClick)
+            .padding(12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(Icons.Default.Folder, contentDescription = null, tint = VibrantOrange, modifier = Modifier.size(24.dp))
+        Spacer(modifier = Modifier.width(12.dp))
+        Text(text = name, style = MaterialTheme.typography.bodyLarge, color = MidnightBlue)
+    }
+}
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun CustomerCard(
     item: CustomerWithBalance,
     formatter: NumberFormat,
+    allFolders: List<CustomerEntity>,
+    currentParentId: Long?,
     onClick: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onMove: (Long?) -> Unit
 ) {
+    var showOptionsDialog by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
+    var showMoveDialog by remember { mutableStateOf(false) }
 
+    // --- 选项菜单 (移动 / 删除) ---
+    if (showOptionsDialog) {
+        AlertDialog(
+            onDismissRequest = { showOptionsDialog = false },
+            title = { Text("操作選項", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    // 移动按钮
+                    Button(
+                        onClick = {
+                            showOptionsDialog = false
+                            showMoveDialog = true
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = MidnightBlue)
+                    ) {
+                        Icon(Icons.Default.DriveFileMove, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("移動到文件夾")
+                    }
+
+                    // 删除按钮
+                    OutlinedButton(
+                        onClick = {
+                            showOptionsDialog = false
+                            showDeleteDialog = true
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = FunctionalRed),
+                        border = BorderStroke(1.dp, FunctionalRed)
+                    ) {
+                        Icon(Icons.Default.Delete, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("刪除")
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { showOptionsDialog = false }) { Text("取消") }
+            },
+            containerColor = CardSurface,
+            shape = RoundedCornerShape(16.dp)
+        )
+    }
+
+    // --- 删除确认弹窗 ---
     if (showDeleteDialog) {
         AlertDialog(
             onDismissRequest = { showDeleteDialog = false },
@@ -245,13 +364,29 @@ fun CustomerCard(
         )
     }
 
+    // --- 移动选择弹窗 ---
+    if (showMoveDialog) {
+        // 过滤掉自己（如果是文件夹）和当前父文件夹
+        val availableFolders = allFolders.filter { it.id != item.customer.id }
+
+        MoveToFolderDialog(
+            allFolders = availableFolders,
+            currentParentId = currentParentId,
+            onDismiss = { showMoveDialog = false },
+            onFolderSelected = { targetId ->
+                onMove(targetId)
+                showMoveDialog = false
+            }
+        )
+    }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(20.dp))
             .combinedClickable(
                 onClick = onClick,
-                onLongClick = { showDeleteDialog = true }
+                onLongClick = { showOptionsDialog = true } // 长按触发选项菜单
             ),
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = CardSurface),

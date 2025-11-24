@@ -387,7 +387,7 @@ class ReportsViewModel(
                     }
 
                     true to "備份完成"
-                } catch (e: Throwable) { // 修改：捕获 Throwable 防止 OOM 导致崩溃
+                } catch (e: Throwable) {
                     Log.e("ReportsViewModel", "Failed to export backup", e)
                     false to (e.localizedMessage ?: "備份失敗：可能因為儲存空間或記憶體不足")
                 } finally {
@@ -406,7 +406,6 @@ class ReportsViewModel(
                     mkdirs()
                 }
                 try {
-                    // 修改：流式写入临时文件，防止读取大文件导致 OOM
                     val tempZipFile = File(tempDir, "temp_restore.zip")
                     appContext.contentResolver.openInputStream(sourceUri)?.use { input ->
                         tempZipFile.outputStream().use { output ->
@@ -423,7 +422,6 @@ class ReportsViewModel(
                         unzipToDirectory(tempZipFile, tempDir)
                         File(tempDir, "data.json")
                     } else {
-                        // 尝试直接作为 json 读取 (兼容旧版非 zip 备份)
                         File(tempDir, "data.json").apply {
                             tempZipFile.copyTo(this, overwrite = true)
                         }
@@ -475,7 +473,6 @@ class ReportsViewModel(
                         put("phone", customer.phone)
                         put("note", customer.note)
 
-                        // 修复：确保文件名唯一，且不使用 Base64 (避免内存溢出)
                         put("profilePhotoUri", addPhotoToBackup(customer.profilePhotoUri, photosDir, "${customer.id}_profile1"))
                         put("profilePhotoUri2", addPhotoToBackup(customer.profilePhotoUri2, photosDir, "${customer.id}_profile2"))
                         put("profilePhotoUri3", addPhotoToBackup(customer.profilePhotoUri3, photosDir, "${customer.id}_profile3"))
@@ -487,6 +484,10 @@ class ReportsViewModel(
                         put("expectedRepaymentDate", customer.expectedRepaymentDate)
                         put("initialTransactionDone", customer.initialTransactionDone)
                         put("isDeleted", customer.isDeleted)
+
+                        // ✅ 关键修复：添加新字段
+                        put("isGroup", customer.isGroup)
+                        put("parentId", customer.parentId)
                     }
                 )
             }
@@ -508,7 +509,7 @@ class ReportsViewModel(
         }
 
         return JSONObject().apply {
-            put("backupVersion", 2)
+            put("backupVersion", 3) // ✅ 版本更新为 3
             put("customers", customersArray)
             put("ledgerEntries", entriesArray)
         }.toString()
@@ -524,7 +525,6 @@ class ReportsViewModel(
                 val obj = customersArray.getJSONObject(i)
                 val id = obj.optLong("id")
 
-                // 即使 JSON 中没有 Base64 字段，也不影响 restorePhoto 的工作（它会查找文件）
                 val profilePhotoBase64 = obj.optNullableString("profilePhotoBase64")
                 val profilePhoto2Base64 = obj.optNullableString("profilePhoto2Base64")
                 val profilePhoto3Base64 = obj.optNullableString("profilePhoto3Base64")
@@ -540,7 +540,6 @@ class ReportsViewModel(
                         name = obj.optString("name"),
                         phone = obj.optString("phone"),
                         note = obj.optString("note"),
-                        // 修复：使用 ID 作为文件名前缀，防止所有客户头像变成同一张
                         profilePhotoUri = restorePhoto(obj.optNullableString("profilePhotoUri"), profilePhotoBase64, backupVersion, extractedRoot, "${id}_profile1"),
                         profilePhotoUri2 = restorePhoto(obj.optNullableString("profilePhotoUri2"), profilePhoto2Base64, backupVersion, extractedRoot, "${id}_profile2"),
                         profilePhotoUri3 = restorePhoto(obj.optNullableString("profilePhotoUri3"), profilePhoto3Base64, backupVersion, extractedRoot, "${id}_profile3"),
@@ -550,7 +549,11 @@ class ReportsViewModel(
                         passportPhotoUri3 = restorePhoto(obj.optNullableString("passportPhotoUri3"), passportPhoto3Base64, backupVersion, extractedRoot, "${id}_passport3"),
                         expectedRepaymentDate = if (obj.isNull("expectedRepaymentDate")) null else obj.optLong("expectedRepaymentDate"),
                         initialTransactionDone = obj.optBoolean("initialTransactionDone", false),
-                        isDeleted = obj.optBoolean("isDeleted", false)
+                        isDeleted = obj.optBoolean("isDeleted", false),
+
+                        // ✅ 关键修复：读取新字段
+                        isGroup = obj.optBoolean("isGroup", false),
+                        parentId = if (obj.isNull("parentId")) null else obj.optLong("parentId")
                     )
                 )
             }
@@ -602,7 +605,6 @@ class ReportsViewModel(
         if (!file.exists()) return null
         return try {
             val extension = file.extension.takeIf { it.isNotBlank() } ?: "jpg"
-            // 修复：正确使用变量，而不是字面量字符串
             val backupName = "$fileNamePrefix.$extension"
             val destination = File(photosDir, backupName)
             file.copyTo(destination, overwrite = true)
@@ -681,7 +683,6 @@ class ReportsViewModel(
 
     private fun isZipFile(file: File): Boolean {
         if (file.length() < 4) return false
-        // 简单读取头4个字节检查 PK 标记
         return try {
             file.inputStream().use { input ->
                 val bytes = ByteArray(4)
