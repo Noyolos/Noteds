@@ -14,7 +14,7 @@ import com.example.noteds.data.model.TransactionType
 import com.example.noteds.data.repository.BackupRepository
 import com.example.noteds.data.repository.CustomerRepository
 import com.example.noteds.data.repository.LedgerRepository
-import com.google.gson.Gson
+import com.google.gson.GsonBuilder
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
@@ -35,6 +35,10 @@ class CustomerViewModel(
     private val backupRepository: BackupRepository,
     private val appContext: Context
 ) : ViewModel() {
+
+    private val gson = GsonBuilder()
+        .serializeNulls()
+        .create()
 
     fun getTransactionsForCustomer(customerId: Long): Flow<List<LedgerEntryEntity>> =
         ledgerRepository.getEntriesForCustomer(customerId)
@@ -227,7 +231,7 @@ class CustomerViewModel(
                 // 使用 BackupData 封装，确保 JSON 结构包含 parentId 和 isGroup
                 val backupData = BackupData(customers = customers, entries = entries)
 
-                val json = Gson().toJson(backupData)
+                val json = gson.toJson(backupData)
                 FileWriter(file).use { it.write(json) }
 
                 withContext(Dispatchers.Main) { onSuccess() }
@@ -242,7 +246,7 @@ class CustomerViewModel(
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val json = file.readText()
-                val backupData = Gson().fromJson(json, BackupData::class.java)
+                val backupData = gson.fromJson(json, BackupData::class.java)
 
                 // BackupRepository 会清空旧数据并插入新数据
                 // 因为 backupData.customers 是从包含 parentId/isGroup 的 JSON 解析出来的

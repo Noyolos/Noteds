@@ -36,14 +36,14 @@ class BackupRepository(
 
             // 将“旧 ID -> 新 ID”对照表保存下来，用于重写 parentId、entry.customerId 等外键引用。
             val idMap = activeCustomers
-                .mapIndexed { index, customer -> customer.id to insertedIds[index] }
-                .toMap()
+                .zip(insertedIds)
+                .associate { (customer, newId) -> customer.id to newId }
 
             // 重新构建客户列表：
             // 1) 主键改成 Room 分配的新 ID。
             // 2) parentId 替换成新的主键（如果父级不在备份中则置空，避免悬挂引用）。
             val normalizedCustomers = activeCustomers.mapIndexed { index, customer ->
-                val newParentId = customer.parentId?.let { idMap[it] }
+                val newParentId = customer.parentId?.let(idMap::get)
                 customer.copy(id = insertedIds[index], parentId = newParentId)
             }
 

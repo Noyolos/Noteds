@@ -3,7 +3,6 @@ package com.example.noteds
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.activity.viewModels
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -11,25 +10,24 @@ import androidx.compose.ui.Modifier
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
+import com.example.noteds.di.AppContainer
 import com.example.noteds.ui.AppRoot
 import com.example.noteds.ui.customers.CustomerViewModel
 import com.example.noteds.ui.reports.ReportsViewModel
 
 class MainActivity : ComponentActivity() {
 
-    private val appContainer by lazy { (application as NotedsApp).container }
-
-    // 这里使用了 activity-ktx 提供的 viewModels 委托
-    private val customerViewModel: CustomerViewModel by viewModels {
-        CustomerViewModelFactory(appContainer)
-    }
-
-    private val reportsViewModel: ReportsViewModel by viewModels {
-        ReportsViewModelFactory(appContainer)
-    }
+    private lateinit var appContainer: AppContainer
+    private lateinit var customerViewModel: CustomerViewModel
+    private lateinit var reportsViewModel: ReportsViewModel
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        appContainer = (application as NotedsApp).container
+        customerViewModel = ViewModelProvider(this, CustomerViewModelFactory(appContainer))
+            [CustomerViewModel::class.java]
+        reportsViewModel = ViewModelProvider(this, ReportsViewModelFactory(appContainer))
+            [ReportsViewModel::class.java]
         WindowCompat.setDecorFitsSystemWindows(window, false)
         setContent {
             MaterialTheme {
