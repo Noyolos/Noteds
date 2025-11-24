@@ -38,6 +38,7 @@ class CustomerViewModel(
 
     private val gson = GsonBuilder()
         .serializeNulls()
+        .setPrettyPrinting()
         .create()
 
     fun getTransactionsForCustomer(customerId: Long): Flow<List<LedgerEntryEntity>> =

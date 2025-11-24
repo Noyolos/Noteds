@@ -24,10 +24,14 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         appContainer = (application as NotedsApp).container
+
+        // ✅ 修复：使用 .get() 方法，修正语法错误
         customerViewModel = ViewModelProvider(this, CustomerViewModelFactory(appContainer))
-            [CustomerViewModel::class.java]
+            .get(CustomerViewModel::class.java)
+
         reportsViewModel = ViewModelProvider(this, ReportsViewModelFactory(appContainer))
-            [ReportsViewModel::class.java]
+            .get(ReportsViewModel::class.java)
+
         WindowCompat.setDecorFitsSystemWindows(window, false)
         setContent {
             MaterialTheme {
@@ -39,7 +43,7 @@ class MainActivity : ComponentActivity() {
                         customerViewModel = customerViewModel,
                         reportsViewModel = reportsViewModel
                     )
-                }
+                    }
             }
         }
     }
@@ -54,7 +58,7 @@ private class CustomerViewModelFactory(
             return CustomerViewModel(
                 customerRepository = appContainer.customerRepository,
                 ledgerRepository = appContainer.ledgerRepository,
-                backupRepository = appContainer.backupRepository, // 修复：传入 BackupRepository
+                backupRepository = appContainer.backupRepository,
                 appContext = appContainer.appContext
             ) as T
         }

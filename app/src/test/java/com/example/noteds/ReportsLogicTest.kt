@@ -3,6 +3,7 @@ package com.example.noteds
 import android.content.Context
 import com.example.noteds.data.entity.CustomerEntity
 import com.example.noteds.data.entity.LedgerEntryEntity
+import com.example.noteds.data.repository.BackupRepository // ✅ 新增导入
 import com.example.noteds.data.repository.CustomerRepository
 import com.example.noteds.data.repository.LedgerRepository
 import com.example.noteds.ui.reports.ReportsViewModel
@@ -10,7 +11,6 @@ import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -29,6 +29,10 @@ class ReportsLogicTest {
 
     private val customerRepository: CustomerRepository = mockk()
     private val ledgerRepository: LedgerRepository = mockk()
+
+    // ✅ 新增：Mock BackupRepository
+    private val backupRepository: BackupRepository = mockk(relaxed = true)
+
     private val context: Context = mockk(relaxed = true)
     private lateinit var viewModel: ReportsViewModel
     private val testDispatcher = StandardTestDispatcher()
@@ -47,11 +51,6 @@ class ReportsLogicTest {
 
     @Test
     fun `test total debt calculation logic`() = runTest {
-        // 場景：
-        // 客戶 A: 欠 100, 還 20 (剩 80)
-        // 客戶 B: 欠 50 (剩 50)
-        // 客戶 C: 欠 100, 還 120 (溢繳 20，不應減少總欠款)
-
         val customers = listOf(
             CustomerEntity(id = 1, name = "A", phone = "", note = ""),
             CustomerEntity(id = 2, name = "B", phone = "", note = ""),
@@ -68,56 +67,46 @@ class ReportsLogicTest {
         every { customerRepository.getAllCustomers() } returns flowOf(customers)
         every { ledgerRepository.getAllEntries() } returns flowOf(entries)
 
-        viewModel = ReportsViewModel(customerRepository, ledgerRepository, context)
+        // ✅ 修复：正确传入 4 个参数 (加入了 backupRepository)
+        viewModel = ReportsViewModel(customerRepository, ledgerRepository, backupRepository, context)
 
-        // 【修復點】：在背景啟動收集 (Collect)，激活 WhileSubscribed
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
-            viewModel.totalDebt.collect()
+            viewModel.totalDebt.collect { } // 修复：collect 需要 lambda
         }
 
-        advanceUntilIdle() // 等待數據計算完成
+        advanceUntilIdle()
 
-        // 預期結果: 80 (A) + 50 (B) = 130.0
         val result = viewModel.totalDebt.value
         assertEquals(130.0, result, 0.01)
     }
 
     @Test
     fun `test aging analysis FIFO logic`() = runTest {
-        // 場景：
-        // 舊賬 (95天前) 100元
-        // 新賬 (10天前) 50元
-        // 今天還款 100元 (應該優先抵消舊賬)
-
         val now = System.currentTimeMillis()
         val dayMillis = 24 * 60 * 60 * 1000L
 
         val entries = listOf(
-            LedgerEntryEntity(id=1, customerId=1, type="DEBT", amount=100.0, timestamp=now - (95 * dayMillis), note="Old"), // 90+ Days
-            LedgerEntryEntity(id=2, customerId=1, type="DEBT", amount=50.0, timestamp=now - (10 * dayMillis), note="New"), // 0-30 Days
-            LedgerEntryEntity(id=3, customerId=1, type="PAYMENT", amount=100.0, timestamp=now, note="Pay") // 應抵消 "Old"
+            LedgerEntryEntity(id=1, customerId=1, type="DEBT", amount=100.0, timestamp=now - (95 * dayMillis), note="Old"),
+            LedgerEntryEntity(id=2, customerId=1, type="DEBT", amount=50.0, timestamp=now - (10 * dayMillis), note="New"),
+            LedgerEntryEntity(id=3, customerId=1, type="PAYMENT", amount=100.0, timestamp=now, note="Pay")
         )
 
         every { ledgerRepository.getAllEntries() } returns flowOf(entries)
-        viewModel = ReportsViewModel(customerRepository, ledgerRepository, context)
 
-        // 【修復點】：啟動收集 agingStats
+        // ✅ 修复：正确传入 4 个参数 (加入了 backupRepository)
+        viewModel = ReportsViewModel(customerRepository, ledgerRepository, backupRepository, context)
+
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
-            viewModel.agingStats.collect()
+            viewModel.agingStats.collect { } // 修复：collect 需要 lambda
         }
 
-        advanceUntilIdle() // 等待計算
+        advanceUntilIdle()
 
         val stats = viewModel.agingStats.value
-
-        // 使用安全查找，防止列表為空時報錯
         val bucket90 = stats.find { it.bucket == "90+ Days" }?.amount ?: 0.0
         val bucket30 = stats.find { it.bucket == "0-30 Days" }?.amount ?: 0.0
 
-        // 90+ Days 的欠款應該被清零
         assertEquals("90+ Days bucket should be cleared", 0.0, bucket90, 0.01)
-
-        // 0-30 Days 的欠款應該保留
         assertEquals("0-30 Days bucket should remain", 50.0, bucket30, 0.01)
     }
 }
