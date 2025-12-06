@@ -5,7 +5,7 @@
     <application
         android:name=".NotedsApp"
         android:icon="@drawable/ic_launcher"
-        android:label="Shazhang"
+        android:label="赊账工具"
         android:theme="@style/Theme.Noteds">
         <activity
             android:name=".MainActivity"

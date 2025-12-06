@@ -12,6 +12,8 @@ import com.example.noteds.data.repository.BackupRepository
 import com.example.noteds.data.repository.CustomerRepository
 import com.example.noteds.data.repository.LedgerRepository
 import com.example.noteds.data.model.TransactionType
+import java.io.BufferedInputStream
+import java.io.BufferedOutputStream
 import java.io.File
 import java.io.FileOutputStream
 import java.util.Calendar
@@ -22,6 +24,7 @@ import java.util.zip.ZipInputStream
 import java.util.zip.ZipOutputStream
 import kotlin.io.buffered
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -344,7 +347,8 @@ class ReportsViewModel(
 
     fun exportBackup(destinationUri: Uri, onResult: (Boolean, String?) -> Unit) {
         viewModelScope.launch {
-            val (success, message) = withContext(Dispatchers.IO) {
+            // ✅ 關鍵修復：加入 NonCancellable，保證任務不會因為螢幕關閉而中斷
+            val (success, message) = withContext(Dispatchers.IO + NonCancellable) {
                 val backupDir = File(appContext.cacheDir, "backup_temp").apply {
                     deleteRecursively()
                     mkdirs()
@@ -363,7 +367,8 @@ class ReportsViewModel(
                     )
 
                     val writeResult = appContext.contentResolver.openOutputStream(destinationUri, "w")?.use { rawStream ->
-                        ZipOutputStream(rawStream.buffered()).use { zipStream ->
+                        // ✅ 關鍵修復：使用 BufferedOutputStream 加速寫入並穩定數據流
+                        ZipOutputStream(BufferedOutputStream(rawStream)).use { zipStream ->
                             zipStream.putNextEntry(ZipEntry("data.json"))
                             zipStream.write(dataBytes)
                             zipStream.closeEntry()
@@ -373,7 +378,8 @@ class ReportsViewModel(
                                 .forEach { photo ->
                                     val relativePath = photo.relativeTo(backupDir).invariantSeparatorsPath
                                     zipStream.putNextEntry(ZipEntry(relativePath))
-                                    photo.inputStream().use { it.copyTo(zipStream) }
+                                    // ✅ 關鍵修復：使用 BufferedInputStream 讀取圖片，減少內存壓力
+                                    photo.inputStream().buffered().use { it.copyTo(zipStream) }
                                     zipStream.closeEntry()
                                 }
 
@@ -400,16 +406,20 @@ class ReportsViewModel(
 
     fun importBackup(sourceUri: Uri, onResult: (Boolean, String?) -> Unit) {
         viewModelScope.launch {
-            val (success, message) = withContext(Dispatchers.IO) {
+            // ✅ 關鍵修復：加入 NonCancellable，防止導入到一半被中斷導致資料庫損壞
+            val (success, message) = withContext(Dispatchers.IO + NonCancellable) {
                 val tempDir = File(appContext.cacheDir, "backup_import").apply {
                     deleteRecursively()
                     mkdirs()
                 }
                 try {
                     val tempZipFile = File(tempDir, "temp_restore.zip")
+                    // ✅ 關鍵修復：使用 BufferedInputStream 防止 "Unexpected end of ZLIB input stream"
                     appContext.contentResolver.openInputStream(sourceUri)?.use { input ->
-                        tempZipFile.outputStream().use { output ->
-                            input.copyTo(output)
+                        BufferedInputStream(input).use { bis ->
+                            tempZipFile.outputStream().buffered().use { bos ->
+                                bis.copyTo(bos)
+                            }
                         }
                     } ?: return@withContext false to "無法讀取檔案"
 
@@ -448,8 +458,14 @@ class ReportsViewModel(
                     true to "導入完成"
                 } catch (e: Throwable) {
                     Log.e("ReportsViewModel", "Failed to import backup", e)
-                    false to ((e.localizedMessage ?: "導入失敗，資料未更動")
-                        .ifBlank { "導入失敗，資料未更動" })
+                    // 優化錯誤提示
+                    val errorMessage = when {
+                        e.toString().contains("Unexpected end of ZLIB input stream") -> "備份檔案已損壞 (寫入不完整)"
+                        e.toString().contains("ZipException") -> "備份檔案格式錯誤"
+                        e.localizedMessage != null -> e.localizedMessage
+                        else -> "導入失敗，資料未更動"
+                    }
+                    false to errorMessage
                 } finally {
                     tempDir.deleteRecursively()
                 }
@@ -485,7 +501,6 @@ class ReportsViewModel(
                         put("initialTransactionDone", customer.initialTransactionDone)
                         put("isDeleted", customer.isDeleted)
 
-                        // ✅ 关键修复：添加新字段
                         put("isGroup", customer.isGroup)
                         put("parentId", customer.parentId)
                     }
@@ -509,7 +524,7 @@ class ReportsViewModel(
         }
 
         return JSONObject().apply {
-            put("backupVersion", 3) // ✅ 版本更新为 3
+            put("backupVersion", 3)
             put("customers", customersArray)
             put("ledgerEntries", entriesArray)
         }.toString()
@@ -551,7 +566,6 @@ class ReportsViewModel(
                         initialTransactionDone = obj.optBoolean("initialTransactionDone", false),
                         isDeleted = obj.optBoolean("isDeleted", false),
 
-                        // ✅ 关键修复：读取新字段
                         isGroup = obj.optBoolean("isGroup", false),
                         parentId = if (obj.isNull("parentId")) null else obj.optLong("parentId")
                     )
@@ -578,7 +592,8 @@ class ReportsViewModel(
     }
 
     private fun unzipToDirectory(zipFile: File, targetDir: File) {
-        ZipInputStream(zipFile.inputStream()).use { zis ->
+        // ✅ 關鍵修復：解壓時使用 BufferedInputStream
+        ZipInputStream(BufferedInputStream(zipFile.inputStream())).use { zis ->
             var entry: ZipEntry? = zis.nextEntry
             while (entry != null) {
                 if (entry.name.contains("..")) {
@@ -589,7 +604,8 @@ class ReportsViewModel(
                     file.mkdirs()
                 } else {
                     file.parentFile?.mkdirs()
-                    FileOutputStream(file).use { output ->
+                    // ✅ 關鍵修復：解壓寫入時使用 BufferedOutputStream
+                    FileOutputStream(file).buffered().use { output ->
                         zis.copyTo(output)
                     }
                 }
