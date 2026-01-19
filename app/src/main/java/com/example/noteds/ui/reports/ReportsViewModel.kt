@@ -730,3 +730,4 @@ class ReportsViewModel(
         val entries: List<LedgerEntryEntity>
     )
 }
+
