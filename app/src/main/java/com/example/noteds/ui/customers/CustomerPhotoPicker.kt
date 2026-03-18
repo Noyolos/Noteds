@@ -55,6 +55,7 @@ fun CustomerPhotoPicker(
     currentPhotoUri: String?,
     modifier: Modifier = Modifier,
     onPhotoSelected: (String) -> Unit,
+    onPhotoCleared: (() -> Unit)? = null,
     onViewPhoto: ((String) -> Unit)? = null
 ) {
     val context = LocalContext.current
@@ -161,6 +162,16 @@ fun CustomerPhotoPicker(
                 }
                 TextButton(onClick = { galleryLauncher.launch("image/*") }) {
                     Text("Choose from gallery")
+                }
+                if (currentPhotoUri != null && onPhotoCleared != null) {
+                    TextButton(onClick = {
+                        onPhotoCleared()
+                        coroutineScope.launch { sheetState.hide() }.invokeOnCompletion {
+                            showSheet = false
+                        }
+                    }) {
+                        Text("移除照片", color = MaterialTheme.colorScheme.error)
+                    }
                 }
                 TextButton(onClick = {
                     coroutineScope.launch { sheetState.hide() }.invokeOnCompletion {

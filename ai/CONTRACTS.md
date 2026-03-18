@@ -22,6 +22,7 @@
 - Bottom tab selection must keep the three main tabs wired in `AppRoot`.
 - Customer group navigation must keep `isGroup` + `parentId` semantics for folder lists.
 - Backup export/import must remain accessible from `ReportsScreen`.
+- Legacy `idCardPhotoUri` data must remain editable without being silently remapped into `passportPhotoUri*` slots.
 
 ## Data schema invariants (Room)
 - `customers` table maps to `app/src/main/java/com/example/noteds/data/entity/CustomerEntity.kt`:
@@ -40,6 +41,7 @@
 - Room DB name is `noteds-db` (set in `AppContainer`).
 - Photo files are stored in `filesDir/customer_photos` and must be cleaned on delete and restored on import.
 - `FileProvider` authority is `${applicationId}.fileprovider` with paths in `app/src/main/res/xml/file_paths.xml`.
+- Backup import must not delete the existing `customer_photos` directory until restored photos are staged and ready to replace it.
 
 ## Migration policy
 - Never use destructive migrations.

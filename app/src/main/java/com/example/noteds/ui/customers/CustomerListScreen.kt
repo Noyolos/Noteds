@@ -367,7 +367,22 @@ fun CustomerCard(
     // --- 移动选择弹窗 ---
     if (showMoveDialog) {
         // 过滤掉自己（如果是文件夹）和当前父文件夹
-        val availableFolders = allFolders.filter { it.id != item.customer.id }
+        val unavailableFolderIds = remember(allFolders, item.customer.id, item.customer.isGroup) {
+            val blockedIds = mutableSetOf(item.customer.id)
+            if (item.customer.isGroup) {
+                var changed = true
+                while (changed) {
+                    changed = false
+                    allFolders.forEach { folder ->
+                        if (folder.parentId in blockedIds && blockedIds.add(folder.id)) {
+                            changed = true
+                        }
+                    }
+                }
+            }
+            blockedIds
+        }
+        val availableFolders = allFolders.filter { it.id !in unavailableFolderIds }
 
         MoveToFolderDialog(
             allFolders = availableFolders,

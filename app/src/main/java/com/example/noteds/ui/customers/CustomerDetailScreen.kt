@@ -356,6 +356,7 @@ fun TransactionItem(transaction: LedgerEntryEntity, dateFormatter: SimpleDateFor
 fun EditTransactionDialog(entry: LedgerEntryEntity, onDismiss: () -> Unit, onSave: (LedgerEntryEntity) -> Unit, onDelete: () -> Unit) {
     var amountText by remember { mutableStateOf(entry.amount.toString()) }
     var noteText by remember { mutableStateOf(entry.note.orEmpty()) }
+    var amountError by remember { mutableStateOf<String?>(null) }
     var showDatePicker by remember { mutableStateOf(false) }
     val datePickerState = rememberDatePickerState(initialSelectedDateMillis = entry.timestamp)
     val dateFormatter = remember { SimpleDateFormat("dd MMM yyyy", Locale.getDefault()) }
@@ -374,7 +375,14 @@ fun EditTransactionDialog(entry: LedgerEntryEntity, onDismiss: () -> Unit, onSav
         },
         confirmButton = {
             Button(
-                onClick = { val amount = amountText.toDoubleOrNull() ?: return@Button; onSave(entry.copy(amount = amount, note = noteText.ifBlank { null }, timestamp = selectedDate)) },
+                onClick = {
+                    val amount = amountText.toDoubleOrNull()
+                    if (amount == null || amount <= 0) {
+                        amountError = "金額必須大於 0"
+                        return@Button
+                    }
+                    onSave(entry.copy(amount = amount, note = noteText.ifBlank { null }, timestamp = selectedDate))
+                },
                 colors = ButtonDefaults.buttonColors(containerColor = if (entry.type == TransactionType.DEBT.dbValue) DebtColor else PaymentColor)
             ) { Text("保存") }
         },

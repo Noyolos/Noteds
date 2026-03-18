@@ -412,6 +412,9 @@ class ReportsViewModel(
                     deleteRecursively()
                     mkdirs()
                 }
+                val stagedPhotosDir = File(tempDir, "staged_customer_photos").apply {
+                    mkdirs()
+                }
                 try {
                     val tempZipFile = File(tempDir, "temp_restore.zip")
                     // ✅ 關鍵修復：使用 BufferedInputStream 防止 "Unexpected end of ZLIB input stream"
@@ -444,16 +447,18 @@ class ReportsViewModel(
                         return@withContext false to "備份檔案內容為空或已損壞"
                     }
 
-                    val previewVersion = runCatching { JSONObject(jsonText).optInt("backupVersion", 1) }
-                        .getOrDefault(1)
+                    val parsed = parseBackupJson(
+                        json = jsonText,
+                        extractedRoot = tempDir.takeIf { isZip },
+                        photoTargetDir = stagedPhotosDir
+                    )
 
-                    if (previewVersion >= 2) {
-                        clearCustomerPhotoDirectory()
-                    }
-
-                    val parsed = parseBackupJson(jsonText, tempDir.takeIf { isZip })
-
-                    backupRepository.replaceAllData(parsed.customers, parsed.entries)
+                    replacePhotosAndData(
+                        customers = parsed.customers,
+                        entries = parsed.entries,
+                        stagedPhotosDir = stagedPhotosDir,
+                        workingDir = tempDir
+                    )
 
                     true to "導入完成"
                 } catch (e: Throwable) {
@@ -530,7 +535,11 @@ class ReportsViewModel(
         }.toString()
     }
 
-    private fun parseBackupJson(json: String, extractedRoot: File?): ParsedBackup {
+    private fun parseBackupJson(
+        json: String,
+        extractedRoot: File?,
+        photoTargetDir: File
+    ): ParsedBackup {
         val root = JSONObject(json)
         val backupVersion = root.optInt("backupVersion", 1)
         val customersArray = root.optJSONArray("customers") ?: JSONArray()
@@ -555,13 +564,13 @@ class ReportsViewModel(
                         name = obj.optString("name"),
                         phone = obj.optString("phone"),
                         note = obj.optString("note"),
-                        profilePhotoUri = restorePhoto(obj.optNullableString("profilePhotoUri"), profilePhotoBase64, backupVersion, extractedRoot, "${id}_profile1"),
-                        profilePhotoUri2 = restorePhoto(obj.optNullableString("profilePhotoUri2"), profilePhoto2Base64, backupVersion, extractedRoot, "${id}_profile2"),
-                        profilePhotoUri3 = restorePhoto(obj.optNullableString("profilePhotoUri3"), profilePhoto3Base64, backupVersion, extractedRoot, "${id}_profile3"),
-                        idCardPhotoUri = restorePhoto(obj.optNullableString("idCardPhotoUri"), idCardPhotoBase64, backupVersion, extractedRoot, "${id}_idcard"),
-                        passportPhotoUri = restorePhoto(obj.optNullableString("passportPhotoUri"), passportPhotoBase64, backupVersion, extractedRoot, "${id}_passport1"),
-                        passportPhotoUri2 = restorePhoto(obj.optNullableString("passportPhotoUri2"), passportPhoto2Base64, backupVersion, extractedRoot, "${id}_passport2"),
-                        passportPhotoUri3 = restorePhoto(obj.optNullableString("passportPhotoUri3"), passportPhoto3Base64, backupVersion, extractedRoot, "${id}_passport3"),
+                        profilePhotoUri = restorePhoto(obj.optNullableString("profilePhotoUri"), profilePhotoBase64, backupVersion, extractedRoot, "${id}_profile1", photoTargetDir),
+                        profilePhotoUri2 = restorePhoto(obj.optNullableString("profilePhotoUri2"), profilePhoto2Base64, backupVersion, extractedRoot, "${id}_profile2", photoTargetDir),
+                        profilePhotoUri3 = restorePhoto(obj.optNullableString("profilePhotoUri3"), profilePhoto3Base64, backupVersion, extractedRoot, "${id}_profile3", photoTargetDir),
+                        idCardPhotoUri = restorePhoto(obj.optNullableString("idCardPhotoUri"), idCardPhotoBase64, backupVersion, extractedRoot, "${id}_idcard", photoTargetDir),
+                        passportPhotoUri = restorePhoto(obj.optNullableString("passportPhotoUri"), passportPhotoBase64, backupVersion, extractedRoot, "${id}_passport1", photoTargetDir),
+                        passportPhotoUri2 = restorePhoto(obj.optNullableString("passportPhotoUri2"), passportPhoto2Base64, backupVersion, extractedRoot, "${id}_passport2", photoTargetDir),
+                        passportPhotoUri3 = restorePhoto(obj.optNullableString("passportPhotoUri3"), passportPhoto3Base64, backupVersion, extractedRoot, "${id}_passport3", photoTargetDir),
                         expectedRepaymentDate = if (obj.isNull("expectedRepaymentDate")) null else obj.optLong("expectedRepaymentDate"),
                         initialTransactionDone = obj.optBoolean("initialTransactionDone", false),
                         isDeleted = obj.optBoolean("isDeleted", false),
@@ -593,13 +602,19 @@ class ReportsViewModel(
 
     private fun unzipToDirectory(zipFile: File, targetDir: File) {
         // ✅ 關鍵修復：解壓時使用 BufferedInputStream
+        val canonicalTargetDir = targetDir.canonicalFile
         ZipInputStream(BufferedInputStream(zipFile.inputStream())).use { zis ->
             var entry: ZipEntry? = zis.nextEntry
             while (entry != null) {
-                if (entry.name.contains("..")) {
+                val file = File(targetDir, entry.name)
+                val canonicalFile = file.canonicalFile
+                val targetPrefix = canonicalTargetDir.path + File.separator
+                if (
+                    canonicalFile.path != canonicalTargetDir.path &&
+                    !canonicalFile.path.startsWith(targetPrefix)
+                ) {
                     throw IllegalArgumentException("偵測到不安全的檔案路徑")
                 }
-                val file = File(targetDir, entry.name)
                 if (entry.isDirectory) {
                     file.mkdirs()
                 } else {
@@ -635,26 +650,23 @@ class ReportsViewModel(
         value: String?,
         backupVersion: Int,
         extractedRoot: File?,
-        nameHint: String
+        nameHint: String,
+        targetDir: File
     ): String? {
         if (value.isNullOrBlank()) return null
-        val targetDir = File(appContext.filesDir, "customer_photos").apply { mkdirs() }
+        targetDir.mkdirs()
 
         if (backupVersion >= 2 && extractedRoot != null && value.startsWith("photos/")) {
             val sourceFile = File(extractedRoot, value)
             if (!sourceFile.exists()) return null
 
-            return try {
-                val extension = sourceFile.extension.takeIf { it.isNotBlank() } ?: "jpg"
-                val targetFile = File(
-                    targetDir,
-                    "${nameHint}_${System.currentTimeMillis()}_${UUID.randomUUID()}.$extension"
-                )
-                sourceFile.copyTo(targetFile, overwrite = true)
-                targetFile.absolutePath
-            } catch (e: Exception) {
-                Log.e("ReportsViewModel", "Failed to restore photo from backup", e)
-                null
+            return copyPhotoToDirectory(sourceFile, targetDir, nameHint)
+        }
+
+        if (extractedRoot != null && !File(value).isAbsolute) {
+            val relativeSource = File(extractedRoot, value)
+            if (relativeSource.exists()) {
+                return copyPhotoToDirectory(relativeSource, targetDir, nameHint)
             }
         }
 
@@ -669,17 +681,18 @@ class ReportsViewModel(
         base64Value: String?,
         backupVersion: Int,
         extractedRoot: File?,
-        nameHint: String
+        nameHint: String,
+        targetDir: File
     ): String? {
         if (!base64Value.isNullOrBlank()) {
-            decodePhotoFromBase64(base64Value, nameHint)?.let { return it }
+            decodePhotoFromBase64(base64Value, nameHint, targetDir)?.let { return it }
         }
 
-        return resolveImportedUri(uriValue, backupVersion, extractedRoot, nameHint)
+        return resolveImportedUri(uriValue, backupVersion, extractedRoot, nameHint, targetDir)
     }
 
-    private fun decodePhotoFromBase64(value: String, nameHint: String): String? {
-        val targetDir = File(appContext.filesDir, "customer_photos").apply { mkdirs() }
+    private fun decodePhotoFromBase64(value: String, nameHint: String, targetDir: File): String? {
+        targetDir.mkdirs()
         return try {
             val bytes = Base64.decode(value, Base64.DEFAULT)
             if (bytes.isEmpty()) return null
@@ -695,6 +708,98 @@ class ReportsViewModel(
             Log.e("ReportsViewModel", "Failed to decode photo from backup", e)
             null
         }
+    }
+
+    private fun copyPhotoToDirectory(sourceFile: File, targetDir: File, nameHint: String): String? {
+        targetDir.mkdirs()
+        return try {
+            val extension = sourceFile.extension.takeIf { it.isNotBlank() } ?: "jpg"
+            val targetFile = File(
+                targetDir,
+                "${nameHint}_${System.currentTimeMillis()}_${UUID.randomUUID()}.$extension"
+            )
+            sourceFile.copyTo(targetFile, overwrite = true)
+            targetFile.absolutePath
+        } catch (e: Exception) {
+            Log.e("ReportsViewModel", "Failed to copy photo", e)
+            null
+        }
+    }
+
+    private suspend fun replacePhotosAndData(
+        customers: List<CustomerEntity>,
+        entries: List<LedgerEntryEntity>,
+        stagedPhotosDir: File,
+        workingDir: File
+    ) {
+        val existingPhotosBackupDir = File(workingDir, "existing_customer_photos_backup")
+        val targetPhotoDir = File(appContext.filesDir, "customer_photos")
+
+        if (existingPhotosBackupDir.exists()) {
+            existingPhotosBackupDir.deleteRecursively()
+        }
+        if (targetPhotoDir.exists()) {
+            targetPhotoDir.copyRecursively(existingPhotosBackupDir, overwrite = true)
+        }
+
+        try {
+            clearCustomerPhotoDirectory()
+            val importedCustomers = materializeImportedPhotos(customers, stagedPhotosDir, targetPhotoDir)
+            backupRepository.replaceAllData(importedCustomers, entries)
+        } catch (e: Throwable) {
+            clearCustomerPhotoDirectory()
+            if (existingPhotosBackupDir.exists()) {
+                existingPhotosBackupDir.copyRecursively(targetPhotoDir, overwrite = true)
+            }
+            throw e
+        } finally {
+            existingPhotosBackupDir.deleteRecursively()
+        }
+    }
+
+    private fun materializeImportedPhotos(
+        customers: List<CustomerEntity>,
+        stagedPhotosDir: File,
+        targetPhotoDir: File
+    ): List<CustomerEntity> {
+        return customers.map { customer ->
+            customer.copy(
+                profilePhotoUri = moveStagedPhotoToAppDir(customer.profilePhotoUri, stagedPhotosDir, targetPhotoDir),
+                profilePhotoUri2 = moveStagedPhotoToAppDir(customer.profilePhotoUri2, stagedPhotosDir, targetPhotoDir),
+                profilePhotoUri3 = moveStagedPhotoToAppDir(customer.profilePhotoUri3, stagedPhotosDir, targetPhotoDir),
+                idCardPhotoUri = moveStagedPhotoToAppDir(customer.idCardPhotoUri, stagedPhotosDir, targetPhotoDir),
+                passportPhotoUri = moveStagedPhotoToAppDir(customer.passportPhotoUri, stagedPhotosDir, targetPhotoDir),
+                passportPhotoUri2 = moveStagedPhotoToAppDir(customer.passportPhotoUri2, stagedPhotosDir, targetPhotoDir),
+                passportPhotoUri3 = moveStagedPhotoToAppDir(customer.passportPhotoUri3, stagedPhotosDir, targetPhotoDir)
+            )
+        }
+    }
+
+    private fun moveStagedPhotoToAppDir(
+        path: String?,
+        stagedPhotosDir: File,
+        targetPhotoDir: File
+    ): String? {
+        if (path.isNullOrBlank()) return null
+
+        val sourceFile = File(path)
+        if (!sourceFile.exists()) return path
+
+        val canonicalSource = sourceFile.canonicalFile
+        val canonicalStagedDir = stagedPhotosDir.canonicalFile
+        val stagedPrefix = canonicalStagedDir.path + File.separator
+        if (
+            canonicalSource.path != canonicalStagedDir.path &&
+            !canonicalSource.path.startsWith(stagedPrefix)
+        ) {
+            return path
+        }
+
+        return copyPhotoToDirectory(
+            sourceFile = canonicalSource,
+            targetDir = targetPhotoDir,
+            nameHint = canonicalSource.nameWithoutExtension
+        )
     }
 
     private fun isZipFile(file: File): Boolean {

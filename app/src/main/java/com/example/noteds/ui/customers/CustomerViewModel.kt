@@ -112,11 +112,24 @@ class CustomerViewModel(
     fun moveCustomer(customer: CustomerEntity, newParentId: Long?) {
         viewModelScope.launch {
             // 防止将文件夹移动到自己内部（简单检查：目标 ID 不能等于自己 ID）
-            if (customer.id == newParentId) return@launch
+            if (!canMoveCustomer(customer, newParentId)) return@launch
 
             val updated = customer.copy(parentId = newParentId)
             customerRepository.updateCustomer(updated)
         }
+    }
+
+    private suspend fun canMoveCustomer(customer: CustomerEntity, newParentId: Long?): Boolean {
+        if (customer.id == newParentId) return false
+        if (!customer.isGroup || newParentId == null) return true
+
+        val allCustomersById = customerRepository.getAllCustomersSnapshot().associateBy { it.id }
+        var cursor = newParentId
+        while (cursor != null) {
+            if (cursor == customer.id) return false
+            cursor = allCustomersById[cursor]?.parentId
+        }
+        return true
     }
 
     fun createFolder(name: String, parentId: Long?) {
@@ -252,6 +265,7 @@ class CustomerViewModel(
         note: String,
         profilePhotoUris: List<String?>,
         passportPhotoUris: List<String?>,
+        idCardPhotoUri: String?,
         repaymentDate: Long? = null
     ) {
         viewModelScope.launch {
@@ -262,6 +276,7 @@ class CustomerViewModel(
 
             val savedProfilePhotos = persistPhotos(profilePhotoUris, "profile")
             val savedPassportPhotos = persistPhotos(passportPhotoUris, "passport")
+            val savedIdCardPhoto = persistPhoto(idCardPhotoUri, "idcard")
 
             cleanupReplacedFiles(
                 old = listOf(existing.profilePhotoUri, existing.profilePhotoUri2, existing.profilePhotoUri3),
@@ -270,6 +285,10 @@ class CustomerViewModel(
             cleanupReplacedFiles(
                 old = listOf(existing.passportPhotoUri, existing.passportPhotoUri2, existing.passportPhotoUri3),
                 new = savedPassportPhotos
+            )
+            cleanupReplacedFiles(
+                old = listOf(existing.idCardPhotoUri),
+                new = listOf(savedIdCardPhoto)
             )
 
             val updated = existing.copy(
@@ -280,6 +299,7 @@ class CustomerViewModel(
                 profilePhotoUri = savedProfilePhotos.getOrNull(0),
                 profilePhotoUri2 = savedProfilePhotos.getOrNull(1),
                 profilePhotoUri3 = savedProfilePhotos.getOrNull(2),
+                idCardPhotoUri = savedIdCardPhoto,
                 passportPhotoUri = savedPassportPhotos.getOrNull(0),
                 passportPhotoUri2 = savedPassportPhotos.getOrNull(1),
                 passportPhotoUri3 = savedPassportPhotos.getOrNull(2),
@@ -298,7 +318,13 @@ class CustomerViewModel(
     fun updateLedgerEntry(entry: LedgerEntryEntity) {
         viewModelScope.launch {
             val normalizedType = TransactionType.fromString(entry.type)?.dbValue ?: return@launch
-            ledgerRepository.updateEntry(entry.copy(type = normalizedType))
+            val sanitizedAmount = entry.amount.takeIf { it > 0 } ?: return@launch
+            ledgerRepository.updateEntry(
+                entry.copy(
+                    type = normalizedType,
+                    amount = sanitizedAmount
+                )
+            )
         }
     }
 

@@ -45,7 +45,9 @@ fun EditCustomerScreen(
     var nameError by remember { mutableStateOf<String?>(null) }
     var phoneError by remember { mutableStateOf<String?>(null) }
     val profilePhotos = remember { mutableStateListOf(customer.profilePhotoUri, customer.profilePhotoUri2, customer.profilePhotoUri3) }
-    val passportPhotos = remember { mutableStateListOf(customer.passportPhotoUri ?: customer.idCardPhotoUri, customer.passportPhotoUri2, customer.passportPhotoUri3) }
+    val passportPhotos = remember { mutableStateListOf(customer.passportPhotoUri, customer.passportPhotoUri2, customer.passportPhotoUri3) }
+    var legacyIdCardPhotoUri by remember { mutableStateOf(customer.idCardPhotoUri) }
+    val showLegacyIdCardSection = remember(customer.idCardPhotoUri) { customer.idCardPhotoUri != null }
     var showDeleteConfirm by remember { mutableStateOf(false) }
 
     fun validatePhone(input: String): Boolean {
@@ -71,7 +73,7 @@ fun EditCustomerScreen(
                     if (!isNameValid) nameError = "姓名必填"
                     if (!isPhoneValid) phoneError = "電話格式不正確"
                     if (isNameValid && isPhoneValid) {
-                        customerViewModel.updateCustomer(customerId = customerId, code = code, name = name, phone = phone, note = note, profilePhotoUris = profilePhotos.toList(), passportPhotoUris = passportPhotos.toList(), repaymentDate = customer.expectedRepaymentDate)
+                        customerViewModel.updateCustomer(customerId = customerId, code = code, name = name, phone = phone, note = note, profilePhotoUris = profilePhotos.toList(), passportPhotoUris = passportPhotos.toList(), idCardPhotoUri = legacyIdCardPhotoUri, repaymentDate = customer.expectedRepaymentDate)
                         onSaved()
                     }
                 },
@@ -97,6 +99,16 @@ fun EditCustomerScreen(
             }
 
             PhotoGrid(title = "證件照片", subtitle = "護照 / 證件最多 3 張", photoUris = passportPhotos, onPhotoChanged = { index, uri -> passportPhotos[index] = uri })
+
+            if (showLegacyIdCardSection || legacyIdCardPhotoUri != null) {
+                CustomerPhotoPicker(
+                    title = "舊版身份證照片",
+                    subtitle = "保留舊資料相容用，可單獨更換或移除。",
+                    currentPhotoUri = legacyIdCardPhotoUri,
+                    onPhotoSelected = { legacyIdCardPhotoUri = it },
+                    onPhotoCleared = { legacyIdCardPhotoUri = null }
+                )
+            }
 
             OutlinedButton(
                 onClick = { showDeleteConfirm = true },

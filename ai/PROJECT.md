@@ -41,16 +41,19 @@
 - Room DB `noteds-db` stores `customers` and `ledger_entries` (see `CustomerEntity`, `LedgerEntryEntity`).
 - Photo files are stored under `filesDir/customer_photos` and referenced by string paths in `CustomerEntity`.
 - Backup/restore uses a zip file with `data.json` and optional `photos/` entries.
+- Backup import stages photos in a temp directory before replacing app photos, and restores the previous photo directory if import fails.
 
 ## UI behavior summary
 - Bottom tabs are Dashboard, Customers, Reports; tab selection is managed in `AppRoot`.
 - Navigation uses a manual `Screen` stack; back pops the stack.
 - Customer groups are folders via `isGroup` and `parentId`; group tap opens `Screen.GroupList`.
+- Edit customer keeps legacy `idCardPhotoUri` data visible as a dedicated compatibility photo field instead of folding it into passport photo slots.
 
 ## Core flows (2-3)
 - Create customer (+ optional initial debt): `AddCustomerScreen` -> `CustomerViewModel.addCustomer` -> `CustomerRepository`/`CustomerDao`, and optional `LedgerRepository.insertEntry`.
 - Record debt/payment: `CustomerDetailScreen` -> `TransactionFormScreen` -> `CustomerViewModel.addLedgerEntry` -> `LedgerDao.insertEntry`.
 - Backup export/import: `ReportsScreen` -> `ReportsViewModel.exportBackup`/`importBackup` -> `BackupRepository.replaceAllData`.
+- Edit old customer photos: `EditCustomerScreen` -> `CustomerViewModel.updateCustomer` keeps legacy `idCardPhotoUri` independent from `passportPhotoUri*` fields so old records can be replaced or cleared safely.
 
 ## Contracts summary (must not break)
 - Data schema invariants, backup format, navigation routes, and do-not-touch zones are defined in `ai/CONTRACTS.md`.
