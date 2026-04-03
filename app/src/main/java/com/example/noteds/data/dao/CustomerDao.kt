@@ -20,6 +20,9 @@ interface CustomerDao {
     @Query("SELECT * FROM customers WHERE isDeleted = 0 ORDER BY name")
     suspend fun getAllCustomersSnapshot(): List<CustomerEntity>
 
+    @Query("SELECT * FROM customers WHERE isDeleted = 0 AND isGroup = 1 ORDER BY name")
+    fun getAllFolders(): Flow<List<CustomerEntity>>
+
     // 获取所有含余额的客户（用于 ViewModel 计算文件夹总金额）
     @Query(
         """

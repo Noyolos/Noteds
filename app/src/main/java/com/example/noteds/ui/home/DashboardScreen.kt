@@ -1,10 +1,21 @@
 package com.example.noteds.ui.home
 
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -12,231 +23,212 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
-import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material3.*
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
+import com.example.noteds.ui.components.rememberThumbnailImageRequest
+import com.example.noteds.ui.i18n.LocalAppLanguage
+import com.example.noteds.ui.i18n.pick
+import com.example.noteds.ui.i18n.rememberCurrencyFormatter
 import com.example.noteds.ui.reports.DebtorData
 import com.example.noteds.ui.reports.ReportsViewModel
-import com.example.noteds.ui.theme.*
+import com.example.noteds.ui.theme.BackgroundColor
+import com.example.noteds.ui.theme.CardSurface
+import com.example.noteds.ui.theme.DebtColor
+import com.example.noteds.ui.theme.MidnightBlue
+import com.example.noteds.ui.theme.PaymentColor
+import com.example.noteds.ui.theme.TextSecondary
+import com.example.noteds.ui.theme.TextWhite
+import com.example.noteds.ui.theme.VibrantOrange
 import java.text.NumberFormat
-import java.util.Locale
+import kotlin.math.abs
 
 @Composable
 fun DashboardScreen(
     reportsViewModel: ReportsViewModel,
     onCustomerClick: (Long) -> Unit
 ) {
-    val totalDebt by reportsViewModel.totalDebt.collectAsState()
-    val topDebtors by reportsViewModel.topDebtors.collectAsState()
-    val debtThisMonth by reportsViewModel.debtThisMonth.collectAsState()
-    val repaymentThisMonth by reportsViewModel.repaymentThisMonth.collectAsState()
+    val language = LocalAppLanguage.current
+    val totalDebt by reportsViewModel.totalDebt.collectAsStateWithLifecycle()
+    val topDebtors by reportsViewModel.topDebtors.collectAsStateWithLifecycle()
+    val debtThisMonth by reportsViewModel.debtThisMonth.collectAsStateWithLifecycle()
+    val repaymentThisMonth by reportsViewModel.repaymentThisMonth.collectAsStateWithLifecycle()
+    val outstandingCustomerCount by reportsViewModel.outstandingCustomerCount.collectAsStateWithLifecycle()
+    val currencyFormatter = rememberCurrencyFormatter()
 
-    // Real trend data
-    val totalDebtTrend by reportsViewModel.totalDebtTrend.collectAsState()
+    val netChangeThisMonth = debtThisMonth - repaymentThisMonth
+    val netChangeLabel = when {
+        netChangeThisMonth > 0 -> language.pick(
+            "本月净变化 +${currencyFormatter.format(abs(netChangeThisMonth))}",
+            "Net this month +${currencyFormatter.format(abs(netChangeThisMonth))}"
+        )
+        netChangeThisMonth < 0 -> language.pick(
+            "本月净变化 -${currencyFormatter.format(abs(netChangeThisMonth))}",
+            "Net this month -${currencyFormatter.format(abs(netChangeThisMonth))}"
+        )
+        else -> language.pick("本月净变化 RM0.00", "Net this month RM0.00")
+    }
+    val outstandingCustomersLabel = language.pick(
+        "$outstandingCustomerCount 位未结清",
+        "$outstandingCustomerCount active debtors"
+    )
 
-    val currencyFormatter = remember { NumberFormat.getCurrencyInstance(Locale.getDefault()) }
-
-    Box(
+    LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .background(BackgroundColor)
+            .background(BackgroundColor),
+        contentPadding = PaddingValues(top = 24.dp, bottom = 100.dp),
+        verticalArrangement = Arrangement.spacedBy(20.dp)
     ) {
-        // 1. Header Background Section
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(280.dp)
-                .clip(RoundedCornerShape(bottomStart = 30.dp, bottomEnd = 30.dp)) // Refined radius
-                .background(MidnightBlue)
-        ) {
-            // Header Content
-            Row(
+        item {
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .statusBarsPadding()
-                    .padding(horizontal = 24.dp, vertical = 24.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                    .padding(horizontal = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                Column {
-                    Text(
-                        text = "老闆，您好 👋",
-                        color = TextWhite.copy(alpha = 0.8f),
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Medium
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "今日賬務概覽",
-                        color = TextWhite,
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-
-                IconButton(
-                    onClick = { /* Notification Action */ },
-                    modifier = Modifier
-                        .size(40.dp)
-                        .clip(CircleShape)
-                        .background(Color.White.copy(alpha = 0.1f))
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Notifications,
-                        contentDescription = "Notifications",
-                        tint = TextWhite,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
+                Text(
+                    text = language.pick("财务总览", "Dashboard"),
+                    color = MidnightBlue,
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.ExtraBold
+                )
+                Text(
+                    text = language.pick("先看最重要的欠款与回款", "Your most important debt and payment numbers"),
+                    color = TextSecondary,
+                    style = MaterialTheme.typography.bodyMedium
+                )
             }
         }
 
-        // 2. Scrollable Content
-        LazyColumn(
+        item {
+            HeroCard(
+                totalDebt = currencyFormatter.format(totalDebt),
+                netChangeLabel = netChangeLabel,
+                outstandingCustomersLabel = outstandingCustomersLabel,
+                debtThisMonth = currencyFormatter.format(debtThisMonth),
+                repaymentThisMonth = currencyFormatter.format(repaymentThisMonth)
+            )
+        }
+
+        item {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = language.pick("重点关注 Top Debtors", "Top Debtors"),
+                    color = MidnightBlue,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = language.pick("查看全部", "View all"),
+                    color = VibrantOrange,
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.clickable {}
+                )
+            }
+        }
+
+        items(
+            items = topDebtors,
+            key = { it.id },
+            contentType = { "debtor" }
+        ) { debtor ->
+            TopDebtorItem(
+                debtor = debtor,
+                currencyFormatter = currencyFormatter,
+                onClick = { onCustomerClick(debtor.id) }
+            )
+        }
+    }
+}
+
+@Composable
+private fun HeroCard(
+    totalDebt: String,
+    netChangeLabel: String,
+    outstandingCustomersLabel: String,
+    debtThisMonth: String,
+    repaymentThisMonth: String
+) {
+    val language = LocalAppLanguage.current
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp),
+        shape = RoundedCornerShape(28.dp),
+        colors = CardDefaults.cardColors(containerColor = CardSurface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 10.dp)
+    ) {
+        Column(
             modifier = Modifier
-                .fillMaxSize(),
-            contentPadding = PaddingValues(top = 130.dp, bottom = 100.dp), // Adjusted padding
-            verticalArrangement = Arrangement.spacedBy(20.dp)
+                .fillMaxWidth()
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(Color.White, CardSurface)
+                    )
+                )
+                .padding(24.dp),
+            verticalArrangement = Arrangement.spacedBy(18.dp)
         ) {
-            // Hero Card
-            item {
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(180.dp)
-                        .padding(horizontal = 24.dp),
-                    shape = RoundedCornerShape(24.dp),
-                    colors = CardDefaults.cardColors(containerColor = CardSurface),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 12.dp) // Shadow float
-                ) {
-                    Box(modifier = Modifier.fillMaxSize()) {
-                        // Trend Line with real data
-                        TrendLineChart(
-                            dataPoints = totalDebtTrend,
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(top = 60.dp),
-                            lineColor = VibrantOrange.copy(alpha = 0.2f)
-                        )
-
-                        Column(
-                            modifier = Modifier
-                                .padding(24.dp)
-                                .align(Alignment.TopStart)
-                        ) {
-                            Text(
-                                text = "總待收回款項 (TOTAL DEBT)",
-                                color = TextSecondary,
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.SemiBold,
-                                letterSpacing = 1.sp
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                text = currencyFormatter.format(totalDebt),
-                                color = MidnightBlue,
-                                style = MaterialTheme.typography.displaySmall,
-                                fontWeight = FontWeight.ExtraBold,
-                                fontSize = 32.sp
-                            )
-                        }
-
-                        // Icon Box
-                        Box(
-                            modifier = Modifier
-                                .align(Alignment.TopEnd)
-                                .padding(24.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(VibrantOrange.copy(alpha = 0.1f))
-                                .padding(8.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.ArrowUpward, // Placeholder for TrendingUp
-                                contentDescription = null,
-                                tint = VibrantOrange,
-                                modifier = Modifier.size(24.dp)
-                            )
-                        }
-                    }
-                }
-            }
-
-            // Quick Stats
-            item {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 24.dp),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    StatCard(
-                        title = "本月新增賒賬",
-                        amount = currencyFormatter.format(debtThisMonth),
-                        amountColor = DebtColor,
-                        icon = Icons.Default.ArrowUpward,
-                        modifier = Modifier.weight(1f)
-                    )
-                    StatCard(
-                        title = "本月已收回款",
-                        amount = currencyFormatter.format(repaymentThisMonth),
-                        amountColor = PaymentColor,
-                        icon = Icons.Default.ArrowDownward,
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-            }
-
-            // Top Debtors Header
-            item {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 24.dp, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "重點關注 (Top Debtors)",
-                        color = MidnightBlue,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = "查看全部",
-                        color = VibrantOrange,
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.clickable { /* View All */ }
-                    )
-                }
-            }
-
-            // Top Debtors List
-            items(
-                items = topDebtors,
-                key = { it.id }
-            ) { debtor ->
-                TopDebtorItem(
-                    debtor = debtor,
-                    currencyFormatter = currencyFormatter,
-                    onClick = { onCustomerClick(debtor.id) }
+            Text(
+                text = "Top total debt",
+                color = TextSecondary,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
+                letterSpacing = 1.sp
+            )
+            Text(
+                text = totalDebt,
+                color = MidnightBlue,
+                style = MaterialTheme.typography.displaySmall,
+                fontWeight = FontWeight.ExtraBold
+            )
+            HeroInsightRow(
+                primaryText = netChangeLabel,
+                secondaryText = outstandingCustomersLabel
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                HeroMetricBlock(
+                    title = language.pick("本月新增 Debt", "Debt added"),
+                    value = debtThisMonth,
+                    accent = DebtColor,
+                    icon = Icons.Default.ArrowUpward,
+                    modifier = Modifier.weight(1f)
+                )
+                HeroMetricBlock(
+                    title = language.pick("本月收回 Payment", "Payments"),
+                    value = repaymentThisMonth,
+                    accent = PaymentColor,
+                    icon = Icons.Default.ArrowDownward,
+                    modifier = Modifier.weight(1f)
                 )
             }
         }
@@ -244,54 +236,75 @@ fun DashboardScreen(
 }
 
 @Composable
-fun TrendLineChart(
-    dataPoints: List<Float>,
-    modifier: Modifier = Modifier,
-    lineColor: Color
+private fun HeroMetricBlock(
+    title: String,
+    value: String,
+    accent: Color,
+    icon: ImageVector,
+    modifier: Modifier = Modifier
 ) {
-    if (dataPoints.isEmpty()) return
-
-    Canvas(modifier = modifier) {
-        val width = size.width
-        val height = size.height
-        val points = dataPoints
-
-        val path = Path()
-        val stepX = width / (points.size - 1)
-
-        points.forEachIndexed { index, ratio ->
-            val x = index * stepX
-            val y = height - (height * ratio) // Invert for display (0 at bottom)
-
-            if (index == 0) {
-                path.moveTo(x, y)
-            } else {
-                val prevX = (index - 1) * stepX
-                val prevY = height - (height * points[index - 1])
-                val controlX1 = prevX + stepX / 2
-                val controlX2 = x - stepX / 2
-                path.cubicTo(controlX1, prevY, controlX2, y, x, y)
-            }
-        }
-
-        val fillPath = Path()
-        fillPath.addPath(path)
-        fillPath.lineTo(width, height)
-        fillPath.lineTo(0f, height)
-        fillPath.close()
-
-        drawPath(
-            path = fillPath,
-            brush = Brush.verticalGradient(
-                colors = listOf(lineColor, Color.Transparent),
-                startY = 0f,
-                endY = height
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(18.dp))
+            .background(accent.copy(alpha = 0.08f))
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(28.dp)
+                .clip(CircleShape)
+                .background(Color.White.copy(alpha = 0.85f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = accent,
+                modifier = Modifier.size(16.dp)
             )
+        }
+        Text(
+            text = title,
+            style = MaterialTheme.typography.labelSmall,
+            color = TextSecondary,
+            fontWeight = FontWeight.Medium
         )
-        drawPath(
-            path = path,
-            color = VibrantOrange, // Solid Orange Line
-            style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round)
+        Text(
+            text = value,
+            style = MaterialTheme.typography.titleMedium,
+            color = accent,
+            fontWeight = FontWeight.Bold
+        )
+    }
+}
+
+@Composable
+private fun HeroInsightRow(
+    primaryText: String,
+    secondaryText: String
+) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        HeroInsightChip(text = primaryText)
+        HeroInsightChip(text = secondaryText)
+    }
+}
+
+@Composable
+private fun HeroInsightChip(text: String) {
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(999.dp))
+            .background(MidnightBlue.copy(alpha = 0.06f))
+            .padding(horizontal = 12.dp, vertical = 8.dp)
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelMedium,
+            color = MidnightBlue,
+            fontWeight = FontWeight.SemiBold
         )
     }
 }
@@ -308,12 +321,12 @@ fun StatCard(
         modifier = modifier,
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = CardSurface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp) // soft shadow
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
     ) {
         Column(
             modifier = Modifier
                 .padding(16.dp)
-                .height(80.dp), // Fixed height
+                .height(80.dp),
             verticalArrangement = Arrangement.SpaceBetween
         ) {
             Box(
@@ -354,14 +367,16 @@ fun TopDebtorItem(
     currencyFormatter: NumberFormat,
     onClick: () -> Unit
 ) {
+    val imageRequest = rememberThumbnailImageRequest(debtor.photoUri, 48.dp)
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 24.dp) // align with padding
+            .padding(horizontal = 24.dp)
             .clickable(onClick = onClick),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = CardSurface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp) // shadow-soft
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
     ) {
         Row(
             modifier = Modifier
@@ -369,25 +384,22 @@ fun TopDebtorItem(
                 .fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // 头像或首字母容器
             Box(
                 modifier = Modifier
                     .size(48.dp)
-                    .clip(RoundedCornerShape(12.dp)) // Rounded Square
+                    .clip(RoundedCornerShape(12.dp))
                     .background(BackgroundColor)
                     .border(1.dp, Color(0xFFEEEEEE), RoundedCornerShape(12.dp)),
                 contentAlignment = Alignment.Center
             ) {
                 if (!debtor.photoUri.isNullOrBlank()) {
-                    // 显示头像
                     AsyncImage(
-                        model = debtor.photoUri,
+                        model = imageRequest,
                         contentDescription = null,
                         modifier = Modifier.fillMaxSize(),
                         contentScale = ContentScale.Crop
                     )
                 } else {
-                    // 显示首字母
                     Text(
                         text = debtor.name.take(1).uppercase(),
                         style = MaterialTheme.typography.titleMedium,

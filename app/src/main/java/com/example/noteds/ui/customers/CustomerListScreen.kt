@@ -5,23 +5,54 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.DriveFileMove
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CreateNewFolder
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.DriveFileMove
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -29,12 +60,25 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.example.noteds.data.entity.CustomerEntity
 import com.example.noteds.data.model.CustomerWithBalance
-import com.example.noteds.ui.theme.*
-import java.text.NumberFormat
-import java.util.Locale
+import com.example.noteds.ui.components.AppScreenHeader
+import com.example.noteds.ui.components.rememberThumbnailImageRequest
+import com.example.noteds.ui.i18n.LocalAppLanguage
+import com.example.noteds.ui.i18n.pick
+import com.example.noteds.ui.i18n.rememberCurrencyFormatter
+import com.example.noteds.ui.theme.BackgroundColor
+import com.example.noteds.ui.theme.CardSurface
+import com.example.noteds.ui.theme.DebtColor
+import com.example.noteds.ui.theme.FunctionalRed
+import com.example.noteds.ui.theme.MidnightBlue
+import com.example.noteds.ui.theme.PaymentColor
+import com.example.noteds.ui.theme.TextSecondary
+import com.example.noteds.ui.theme.TextWhite
+import com.example.noteds.ui.theme.VibrantOrange
+import kotlin.math.abs
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -46,22 +90,19 @@ fun CustomerListScreen(
     onCustomerClick: (CustomerWithBalance) -> Unit = {},
     onAddCustomerClick: () -> Unit
 ) {
+    val language = LocalAppLanguage.current
     val customersFlow = remember(parentId) { customerViewModel.getCustomers(parentId) }
-    val customers by customersFlow.collectAsState(initial = emptyList())
-
-    // --- 新增：获取所有文件夹，用于移动功能 ---
-    val allFolders by customerViewModel.allFolders.collectAsState()
-
-    val currencyFormatter = remember { NumberFormat.getCurrencyInstance(Locale.getDefault()) }
+    val customers by customersFlow.collectAsStateWithLifecycle(initialValue = emptyList())
 
     var searchQuery by remember { mutableStateOf("") }
     var groupHead by remember { mutableStateOf<CustomerEntity?>(null) }
     var showCreateFolderDialog by remember { mutableStateOf(false) }
+    var selectedItem by remember { mutableStateOf<CustomerWithBalance?>(null) }
+    var pendingDelete by remember { mutableStateOf<CustomerWithBalance?>(null) }
+    var pendingMove by remember { mutableStateOf<CustomerWithBalance?>(null) }
 
     LaunchedEffect(parentId) {
-        if (parentId != null) {
-            groupHead = customerViewModel.getCustomer(parentId)
-        }
+        groupHead = if (parentId != null) customerViewModel.getCustomer(parentId) else null
     }
 
     val filteredCustomers = remember(customers, searchQuery) {
@@ -70,12 +111,16 @@ fun CustomerListScreen(
         } else {
             customers.filter {
                 it.customer.name.contains(searchQuery, ignoreCase = true) ||
-                        it.customer.phone.contains(searchQuery)
+                    it.customer.phone.contains(searchQuery)
             }
         }
     }
 
-    val titleText = if (parentId == null) "客戶名錄" else (groupHead?.name ?: "載入中...")
+    val titleText = if (parentId == null) {
+        language.pick("客户名单", "Customers")
+    } else {
+        groupHead?.name ?: language.pick("载入中...", "Loading...")
+    }
 
     if (showCreateFolderDialog) {
         CreateFolderDialog(
@@ -87,78 +132,129 @@ fun CustomerListScreen(
         )
     }
 
-    Scaffold(
-        topBar = {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(MidnightBlue)
-                    .statusBarsPadding()
-                    .padding(bottom = 24.dp)
-                    .clip(RoundedCornerShape(bottomStart = 30.dp, bottomEnd = 30.dp))
-            ) {
-                // Top Row
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 16.dp, horizontal = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    if (onBack != null) {
-                        IconButton(onClick = onBack) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = TextWhite)
-                        }
-                    } else {
-                        Spacer(modifier = Modifier.width(48.dp))
+    selectedItem?.let { item ->
+        AlertDialog(
+            onDismissRequest = { selectedItem = null },
+            title = { Text(language.pick("操作选项", "Actions"), fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(
+                        onClick = {
+                            selectedItem = null
+                            pendingMove = item
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = MidnightBlue)
+                    ) {
+                        Icon(Icons.AutoMirrored.Filled.DriveFileMove, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(language.pick("移动到文件夹", "Move to folder"))
                     }
 
-                    Text(
-                        text = titleText,
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = TextWhite,
-                        modifier = Modifier.weight(1f),
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                    )
+                    OutlinedButton(
+                        onClick = {
+                            selectedItem = null
+                            pendingDelete = item
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = FunctionalRed),
+                        border = BorderStroke(1.dp, FunctionalRed)
+                    ) {
+                        Icon(Icons.Default.Delete, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(language.pick("删除", "Delete"))
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { selectedItem = null }) {
+                    Text(language.pick("取消", "Cancel"))
+                }
+            },
+            containerColor = CardSurface,
+            shape = RoundedCornerShape(16.dp)
+        )
+    }
 
-                    // 新建文件夹按钮
-                    IconButton(onClick = { showCreateFolderDialog = true }) {
-                        Icon(
-                            imageVector = Icons.Default.CreateNewFolder,
-                            contentDescription = "New Folder",
-                            tint = VibrantOrange
+    pendingDelete?.let { item ->
+        AlertDialog(
+            onDismissRequest = { pendingDelete = null },
+            title = {
+                Text(
+                    language.pick(
+                        "删除${if (item.customer.isGroup) "文件夹" else "客户"}",
+                        "Delete ${if (item.customer.isGroup) "folder" else "customer"}"
+                    )
+                )
+            },
+            text = {
+                Text(
+                    if (item.customer.isGroup) {
+                        language.pick(
+                            "确定要删除文件夹“${item.customer.name}”吗？里面的客户也会一起删除。",
+                            "Delete folder \"${item.customer.name}\"? Customers inside it will also be deleted."
+                        )
+                    } else {
+                        language.pick(
+                            "确定要删除“${item.customer.name}”吗？",
+                            "Delete \"${item.customer.name}\"?"
                         )
                     }
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        customerViewModel.deleteCustomer(item.customer)
+                        pendingDelete = null
+                    },
+                    colors = ButtonDefaults.textButtonColors(contentColor = FunctionalRed)
+                ) {
+                    Text(language.pick("删除", "Delete"))
                 }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingDelete = null }) {
+                    Text(language.pick("取消", "Cancel"))
+                }
+            },
+            containerColor = CardSurface,
+            shape = RoundedCornerShape(16.dp)
+        )
+    }
 
-                // Search Bar
-                Box(modifier = Modifier.padding(horizontal = 24.dp)) {
-                    TextField(
-                        value = searchQuery,
-                        onValueChange = { searchQuery = it },
-                        placeholder = { Text("搜尋姓名或電話...", color = TextWhite.copy(alpha = 0.5f)) },
-                        leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = TextWhite) },
-                        trailingIcon = if (searchQuery.isNotEmpty()) {
-                            { IconButton(onClick = { searchQuery = "" }) { Icon(Icons.Default.Close, contentDescription = null, tint = TextWhite) } }
-                        } else null,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(Color.White.copy(alpha = 0.1f)),
-                        colors = TextFieldDefaults.colors(
-                            focusedContainerColor = Color.Transparent,
-                            unfocusedContainerColor = Color.Transparent,
-                            focusedTextColor = TextWhite,
-                            unfocusedTextColor = TextWhite,
-                            focusedIndicatorColor = Color.Transparent,
-                            unfocusedIndicatorColor = Color.Transparent,
-                            cursorColor = TextWhite
-                        ),
-                        singleLine = true
-                    )
+    pendingMove?.let { item ->
+        val allFolders by customerViewModel.allFolders.collectAsStateWithLifecycle()
+        val availableFolders = remember(allFolders, item.customer.id, item.customer.isGroup) {
+            val blockedIds = mutableSetOf(item.customer.id)
+            if (item.customer.isGroup) {
+                var changed = true
+                while (changed) {
+                    changed = false
+                    allFolders.forEach { folder ->
+                        if (folder.parentId in blockedIds && blockedIds.add(folder.id)) {
+                            changed = true
+                        }
+                    }
                 }
             }
-        },
+            allFolders.filter { it.id !in blockedIds }
+        }
+
+        MoveToFolderDialog(
+            allFolders = availableFolders,
+            currentParentId = parentId,
+            onDismiss = { pendingMove = null },
+            onFolderSelected = { targetFolderId ->
+                customerViewModel.moveCustomer(item.customer, targetFolderId)
+                pendingMove = null
+            }
+        )
+    }
+
+    Scaffold(
+        modifier = modifier,
         floatingActionButton = {
             FloatingActionButton(
                 onClick = onAddCustomerClick,
@@ -167,28 +263,95 @@ fun CustomerListScreen(
                 shape = CircleShape,
                 modifier = Modifier.size(56.dp)
             ) {
-                Icon(Icons.Default.Add, contentDescription = "Add Customer", modifier = Modifier.size(28.dp))
+                Icon(
+                    Icons.Default.Add,
+                    contentDescription = language.pick("新增客户", "Add customer"),
+                    modifier = Modifier.size(28.dp)
+                )
             }
         },
         containerColor = BackgroundColor
     ) { padding ->
-        LazyColumn(
-            modifier = Modifier.fillMaxSize().padding(padding),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
         ) {
-            items(items = filteredCustomers, key = { it.customer.id }) { item ->
-                CustomerCard(
-                    item = item,
-                    formatter = currencyFormatter,
-                    allFolders = allFolders, // 传入所有文件夹列表
-                    currentParentId = parentId,
-                    onClick = { onCustomerClick(item) },
-                    onDelete = { customerViewModel.deleteCustomer(item.customer) },
-                    onMove = { targetFolderId ->
-                        customerViewModel.moveCustomer(item.customer, targetFolderId)
+            AppScreenHeader(
+                title = titleText,
+                subtitle = language.pick("长按客户可移动或删除", "Long press a customer for more actions"),
+                onBack = onBack,
+                actions = {
+                    IconButton(
+                        onClick = { showCreateFolderDialog = true },
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(Color.White)
+                    ) {
+                        Icon(
+                            Icons.Default.CreateNewFolder,
+                            contentDescription = language.pick("新建文件夹", "New folder"),
+                            tint = VibrantOrange
+                        )
                     }
+                }
+            )
+
+            Box(modifier = Modifier.padding(horizontal = 24.dp)) {
+                TextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    placeholder = {
+                        Text(
+                            language.pick("搜索姓名或电话...", "Search name or phone..."),
+                            color = TextSecondary.copy(alpha = 0.6f)
+                        )
+                    },
+                    leadingIcon = {
+                        Icon(Icons.Default.Search, contentDescription = null, tint = MidnightBlue)
+                    },
+                    trailingIcon = if (searchQuery.isNotEmpty()) {
+                        {
+                            IconButton(onClick = { searchQuery = "" }) {
+                                Icon(Icons.Default.Close, contentDescription = null, tint = TextSecondary)
+                            }
+                        }
+                    } else {
+                        null
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(CardSurface),
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = CardSurface,
+                        unfocusedContainerColor = CardSurface,
+                        focusedIndicatorColor = Color.Transparent,
+                        unfocusedIndicatorColor = Color.Transparent
+                    ),
+                    singleLine = true
                 )
+            }
+
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(top = 16.dp),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                items(
+                    items = filteredCustomers,
+                    key = { it.customer.id },
+                    contentType = { if (it.customer.isGroup) "folder" else "customer" }
+                ) { item ->
+                    CustomerCard(
+                        item = item,
+                        onClick = { onCustomerClick(item) },
+                        onLongPress = { selectedItem = item }
+                    )
+                }
             }
         }
     }
@@ -196,15 +359,23 @@ fun CustomerListScreen(
 
 @Composable
 fun CreateFolderDialog(onDismiss: () -> Unit, onConfirm: (String) -> Unit) {
+    val language = LocalAppLanguage.current
     var folderName by remember { mutableStateOf("") }
+
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("新建文件夾", color = MidnightBlue, fontWeight = FontWeight.Bold) },
+        title = {
+            Text(
+                language.pick("新建文件夹", "New Folder"),
+                color = MidnightBlue,
+                fontWeight = FontWeight.Bold
+            )
+        },
         text = {
             OutlinedTextField(
                 value = folderName,
                 onValueChange = { folderName = it },
-                label = { Text("文件夾名稱") },
+                label = { Text(language.pick("文件夹名称", "Folder name")) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
@@ -213,10 +384,14 @@ fun CreateFolderDialog(onDismiss: () -> Unit, onConfirm: (String) -> Unit) {
             Button(
                 onClick = { if (folderName.isNotBlank()) onConfirm(folderName) },
                 colors = ButtonDefaults.buttonColors(containerColor = VibrantOrange)
-            ) { Text("建立", color = TextWhite) }
+            ) {
+                Text(language.pick("建立", "Create"), color = TextWhite)
+            }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("取消", color = TextSecondary) }
+            TextButton(onClick = onDismiss) {
+                Text(language.pick("取消", "Cancel"), color = TextSecondary)
+            }
         },
         containerColor = CardSurface,
         shape = RoundedCornerShape(16.dp)
@@ -230,24 +405,32 @@ fun MoveToFolderDialog(
     onDismiss: () -> Unit,
     onFolderSelected: (Long?) -> Unit
 ) {
+    val language = LocalAppLanguage.current
+
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("移動到...", fontWeight = FontWeight.Bold, color = MidnightBlue) },
+        title = {
+            Text(
+                language.pick("移动到...", "Move to..."),
+                fontWeight = FontWeight.Bold,
+                color = MidnightBlue
+            )
+        },
         text = {
             LazyColumn(
                 modifier = Modifier.heightIn(max = 300.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                // 选项：移动到最外层（根目录）
                 if (currentParentId != null) {
                     item {
-                        FolderItem(name = "根目錄 (最外層)", onClick = { onFolderSelected(null) })
+                        FolderItem(
+                            name = language.pick("根目录（最外层）", "Root folder"),
+                            onClick = { onFolderSelected(null) }
+                        )
                     }
                 }
 
-                // 选项：其他文件夹
-                items(allFolders) { folder ->
-                    // 不显示当前所在的文件夹
+                items(items = allFolders, key = { it.id }) { folder ->
                     if (folder.id != currentParentId) {
                         FolderItem(name = folder.name, onClick = { onFolderSelected(folder.id) })
                     }
@@ -256,7 +439,9 @@ fun MoveToFolderDialog(
         },
         confirmButton = {},
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("取消") }
+            TextButton(onClick = onDismiss) {
+                Text(language.pick("取消", "Cancel"))
+            }
         },
         containerColor = CardSurface,
         shape = RoundedCornerShape(16.dp)
@@ -273,7 +458,12 @@ fun FolderItem(name: String, onClick: () -> Unit) {
             .padding(12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(Icons.Default.Folder, contentDescription = null, tint = VibrantOrange, modifier = Modifier.size(24.dp))
+        Icon(
+            Icons.Default.Folder,
+            contentDescription = null,
+            tint = VibrantOrange,
+            modifier = Modifier.size(24.dp)
+        )
         Spacer(modifier = Modifier.width(12.dp))
         Text(text = name, style = MaterialTheme.typography.bodyLarge, color = MidnightBlue)
     }
@@ -283,117 +473,12 @@ fun FolderItem(name: String, onClick: () -> Unit) {
 @Composable
 fun CustomerCard(
     item: CustomerWithBalance,
-    formatter: NumberFormat,
-    allFolders: List<CustomerEntity>,
-    currentParentId: Long?,
     onClick: () -> Unit,
-    onDelete: () -> Unit,
-    onMove: (Long?) -> Unit
+    onLongPress: () -> Unit
 ) {
-    var showOptionsDialog by remember { mutableStateOf(false) }
-    var showDeleteDialog by remember { mutableStateOf(false) }
-    var showMoveDialog by remember { mutableStateOf(false) }
-
-    // --- 选项菜单 (移动 / 删除) ---
-    if (showOptionsDialog) {
-        AlertDialog(
-            onDismissRequest = { showOptionsDialog = false },
-            title = { Text("操作選項", fontWeight = FontWeight.Bold) },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    // 移动按钮
-                    Button(
-                        onClick = {
-                            showOptionsDialog = false
-                            showMoveDialog = true
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(containerColor = MidnightBlue)
-                    ) {
-                        Icon(Icons.Default.DriveFileMove, contentDescription = null)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("移動到文件夾")
-                    }
-
-                    // 删除按钮
-                    OutlinedButton(
-                        onClick = {
-                            showOptionsDialog = false
-                            showDeleteDialog = true
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = FunctionalRed),
-                        border = BorderStroke(1.dp, FunctionalRed)
-                    ) {
-                        Icon(Icons.Default.Delete, contentDescription = null)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("刪除")
-                    }
-                }
-            },
-            confirmButton = {},
-            dismissButton = {
-                TextButton(onClick = { showOptionsDialog = false }) { Text("取消") }
-            },
-            containerColor = CardSurface,
-            shape = RoundedCornerShape(16.dp)
-        )
-    }
-
-    // --- 删除确认弹窗 ---
-    if (showDeleteDialog) {
-        AlertDialog(
-            onDismissRequest = { showDeleteDialog = false },
-            title = { Text("刪除${if(item.customer.isGroup) "文件夾" else "客戶"}") },
-            text = {
-                Text(
-                    if (item.customer.isGroup) "確定要刪除文件夾「${item.customer.name}」嗎？\n內部的客戶將會全部被刪除。"
-                    else "確定要刪除「${item.customer.name}」嗎？"
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = { onDelete(); showDeleteDialog = false }, colors = ButtonDefaults.textButtonColors(contentColor = FunctionalRed)) {
-                    Text("刪除")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDeleteDialog = false }) { Text("取消") }
-            },
-            containerColor = CardSurface,
-            shape = RoundedCornerShape(16.dp)
-        )
-    }
-
-    // --- 移动选择弹窗 ---
-    if (showMoveDialog) {
-        // 过滤掉自己（如果是文件夹）和当前父文件夹
-        val unavailableFolderIds = remember(allFolders, item.customer.id, item.customer.isGroup) {
-            val blockedIds = mutableSetOf(item.customer.id)
-            if (item.customer.isGroup) {
-                var changed = true
-                while (changed) {
-                    changed = false
-                    allFolders.forEach { folder ->
-                        if (folder.parentId in blockedIds && blockedIds.add(folder.id)) {
-                            changed = true
-                        }
-                    }
-                }
-            }
-            blockedIds
-        }
-        val availableFolders = allFolders.filter { it.id !in unavailableFolderIds }
-
-        MoveToFolderDialog(
-            allFolders = availableFolders,
-            currentParentId = currentParentId,
-            onDismiss = { showMoveDialog = false },
-            onFolderSelected = { targetId ->
-                onMove(targetId)
-                showMoveDialog = false
-            }
-        )
-    }
+    val language = LocalAppLanguage.current
+    val formatter = rememberCurrencyFormatter()
+    val avatarRequest = rememberThumbnailImageRequest(item.customer.profilePhotoUri, 48.dp)
 
     Card(
         modifier = Modifier
@@ -401,34 +486,56 @@ fun CustomerCard(
             .clip(RoundedCornerShape(20.dp))
             .combinedClickable(
                 onClick = onClick,
-                onLongClick = { showOptionsDialog = true } // 长按触发选项菜单
+                onLongClick = onLongPress
             ),
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = CardSurface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
     ) {
         Row(
-            modifier = Modifier.padding(16.dp).fillMaxWidth(),
+            modifier = Modifier
+                .padding(16.dp)
+                .fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
             if (item.customer.isGroup) {
                 Box(
-                    modifier = Modifier.size(48.dp).clip(CircleShape).background(VibrantOrange.copy(alpha = 0.1f)),
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(CircleShape)
+                        .background(VibrantOrange.copy(alpha = 0.1f)),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(Icons.Default.Folder, contentDescription = "Folder", tint = VibrantOrange, modifier = Modifier.size(24.dp))
+                    Icon(
+                        Icons.Default.Folder,
+                        contentDescription = language.pick("文件夹", "Folder"),
+                        tint = VibrantOrange,
+                        modifier = Modifier.size(24.dp)
+                    )
                 }
             } else if (!item.customer.profilePhotoUri.isNullOrBlank()) {
                 AsyncImage(
-                    model = item.customer.profilePhotoUri, contentDescription = "Avatar",
-                    contentScale = ContentScale.Crop, modifier = Modifier.size(48.dp).clip(CircleShape)
+                    model = avatarRequest,
+                    contentDescription = language.pick("头像", "Avatar"),
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(CircleShape)
                 )
             } else {
                 Box(
-                    modifier = Modifier.size(48.dp).clip(CircleShape).background(MidnightBlue.copy(alpha = 0.05f)),
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(CircleShape)
+                        .background(MidnightBlue.copy(alpha = 0.05f)),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(text = item.customer.name.take(1).uppercase(), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MidnightBlue)
+                    Text(
+                        text = item.customer.name.take(1).uppercase(),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MidnightBlue
+                    )
                 }
             }
 
@@ -443,7 +550,12 @@ fun CustomerCard(
                         color = MidnightBlue
                     )
                     Spacer(modifier = Modifier.weight(1f))
-                    Icon(Icons.Default.ChevronRight, contentDescription = null, tint = Color.LightGray, modifier = Modifier.size(20.dp))
+                    Icon(
+                        Icons.Default.ChevronRight,
+                        contentDescription = null,
+                        tint = Color.LightGray,
+                        modifier = Modifier.size(20.dp)
+                    )
                 }
 
                 Row(
@@ -453,19 +565,24 @@ fun CustomerCard(
                 ) {
                     if (item.customer.isGroup) {
                         Text(
-                            text = "文件夾",
+                            text = language.pick("文件夹", "Folder"),
                             style = MaterialTheme.typography.bodySmall,
-                            color = TextSecondary.copy(alpha = 0.5f)
+                            color = TextSecondary.copy(alpha = 0.6f)
                         )
-                        val balance = item.balance
                         val balanceText = when {
-                            balance > 0 -> "總欠 ${formatter.format(balance)}"
-                            balance < 0 -> "總存 ${formatter.format(kotlin.math.abs(balance))}"
-                            else -> "無欠款"
+                            item.balance > 0 -> language.pick(
+                                "总欠 ${formatter.format(item.balance)}",
+                                "Debt ${formatter.format(item.balance)}"
+                            )
+                            item.balance < 0 -> language.pick(
+                                "总存 ${formatter.format(abs(item.balance))}",
+                                "Credit ${formatter.format(abs(item.balance))}"
+                            )
+                            else -> language.pick("无欠款", "No balance")
                         }
                         val balanceColor = when {
-                            balance > 0 -> DebtColor
-                            balance < 0 -> PaymentColor
+                            item.balance > 0 -> DebtColor
+                            item.balance < 0 -> PaymentColor
                             else -> TextSecondary
                         }
                         Text(
@@ -481,9 +598,15 @@ fun CustomerCard(
                             color = TextSecondary
                         )
                         val balanceText = when {
-                            item.balance > 0 -> "欠 ${formatter.format(item.balance)}"
-                            item.balance < 0 -> "預存 ${formatter.format(kotlin.math.abs(item.balance))}"
-                            else -> "已結清"
+                            item.balance > 0 -> language.pick(
+                                "欠 ${formatter.format(item.balance)}",
+                                "Debt ${formatter.format(item.balance)}"
+                            )
+                            item.balance < 0 -> language.pick(
+                                "存 ${formatter.format(abs(item.balance))}",
+                                "Credit ${formatter.format(abs(item.balance))}"
+                            )
+                            else -> language.pick("已结清", "Settled")
                         }
                         val balanceColor = when {
                             item.balance > 0 -> DebtColor

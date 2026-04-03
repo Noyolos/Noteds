@@ -1,9 +1,15 @@
 package com.example.noteds.ui.customers
 
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -11,21 +17,41 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
-import androidx.compose.ui.Alignment
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import com.example.noteds.ui.theme.*
-import kotlinx.coroutines.launch
+import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.noteds.ui.components.AppScreenHeader
+import com.example.noteds.ui.i18n.LocalAppLanguage
+import com.example.noteds.ui.i18n.pick
+import com.example.noteds.ui.theme.BackgroundColor
+import com.example.noteds.ui.theme.CardSurface
+import com.example.noteds.ui.theme.FunctionalRed
+import com.example.noteds.ui.theme.MidnightBlue
+import com.example.noteds.ui.theme.TextSecondary
+import com.example.noteds.ui.theme.TextWhite
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EditCustomerScreen(
     customerId: Long,
@@ -33,10 +59,13 @@ fun EditCustomerScreen(
     onBack: () -> Unit,
     onSaved: () -> Unit
 ) {
-    val customers by customerViewModel.customersWithBalance.collectAsState()
-    val customer = customers.firstOrNull { it.customer.id == customerId }?.customer
+    val language = LocalAppLanguage.current
+    val customers by customerViewModel.customersWithBalance.collectAsStateWithLifecycle()
+    val customer = remember(customers, customerId) {
+        customers.firstOrNull { it.customer.id == customerId }?.customer
+    }
 
-    if (customer == null) { return }
+    if (customer == null) return
 
     var code by remember { mutableStateOf(customer.code) }
     var name by remember { mutableStateOf(customer.name) }
@@ -57,53 +86,157 @@ fun EditCustomerScreen(
     }
 
     Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("編輯客戶", color = TextWhite, fontWeight = FontWeight.Bold) },
-                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = TextWhite) } },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MidnightBlue)
-            )
-        },
         bottomBar = {
             Button(
                 onClick = {
-                    nameError = null; phoneError = null
-                    val trimmedName = name.trim(); val trimmedPhone = phone.trim()
-                    val isNameValid = trimmedName.isNotEmpty(); val isPhoneValid = validatePhone(trimmedPhone)
-                    if (!isNameValid) nameError = "姓名必填"
-                    if (!isPhoneValid) phoneError = "電話格式不正確"
+                    nameError = null
+                    phoneError = null
+                    val trimmedName = name.trim()
+                    val trimmedPhone = phone.trim()
+                    val isNameValid = trimmedName.isNotEmpty()
+                    val isPhoneValid = validatePhone(trimmedPhone)
+                    if (!isNameValid) nameError = language.pick("姓名必填", "Name is required")
+                    if (!isPhoneValid) phoneError = language.pick("电话号码格式不正确", "Invalid phone number format")
                     if (isNameValid && isPhoneValid) {
-                        customerViewModel.updateCustomer(customerId = customerId, code = code, name = name, phone = phone, note = note, profilePhotoUris = profilePhotos.toList(), passportPhotoUris = passportPhotos.toList(), idCardPhotoUri = legacyIdCardPhotoUri, repaymentDate = customer.expectedRepaymentDate)
+                        customerViewModel.updateCustomer(
+                            customerId = customerId,
+                            code = code,
+                            name = name,
+                            phone = phone,
+                            note = note,
+                            profilePhotoUris = profilePhotos.toList(),
+                            passportPhotoUris = passportPhotos.toList(),
+                            idCardPhotoUri = legacyIdCardPhotoUri,
+                            repaymentDate = customer.expectedRepaymentDate
+                        )
                         onSaved()
                     }
                 },
-                modifier = Modifier.fillMaxWidth().padding(24.dp).height(56.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = MidnightBlue), shape = RoundedCornerShape(16.dp)
-            ) { Text("保存修改", fontWeight = FontWeight.Bold) }
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(24.dp)
+                    .height(56.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = MidnightBlue),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Text(language.pick("保存修改", "Save changes"), fontWeight = FontWeight.Bold, fontSize = 18.sp)
+            }
         },
         containerColor = BackgroundColor
     ) { padding ->
         Column(
-            modifier = Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(24.dp),
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .verticalScroll(rememberScrollState())
+                .padding(bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(24.dp)
         ) {
-            PhotoGrid(title = "頭像照片", subtitle = "可拍照或相冊上傳，最多 3 張", photoUris = profilePhotos, onPhotoChanged = { index, uri -> profilePhotos[index] = uri })
+            AppScreenHeader(
+                title = language.pick("编辑客户", "Edit Customer"),
+                subtitle = language.pick("更新资料、照片和旧档案兼容字段", "Update profile, photos, and legacy fields"),
+                onBack = onBack
+            )
+
+            Column(
+                modifier = Modifier.padding(horizontal = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(24.dp)
+            ) {
+            PhotoGrid(
+                title = language.pick("头像照片", "Profile photos"),
+                subtitle = language.pick("可拍照或从相册选择，最多 3 张。", "Take photos or choose from gallery, up to 3 photos."),
+                photoUris = profilePhotos,
+                onPhotoChanged = { index, uri -> profilePhotos[index] = uri }
+            )
 
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                Text("基本資料", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = TextSecondary)
-                OutlinedTextField(value = code, onValueChange = { code = it }, placeholder = { Text("客戶編號") }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp), colors = OutlinedTextFieldDefaults.colors(focusedContainerColor = CardSurface, unfocusedContainerColor = CardSurface, focusedBorderColor = MidnightBlue, unfocusedBorderColor = Color.Transparent), keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next), textStyle = MaterialTheme.typography.bodyLarge.copy(color = MidnightBlue))
-                OutlinedTextField(value = name, onValueChange = { name = it; nameError = null }, placeholder = { Text("客戶姓名 *") }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp), colors = OutlinedTextFieldDefaults.colors(focusedContainerColor = CardSurface, unfocusedContainerColor = CardSurface, focusedBorderColor = MidnightBlue, unfocusedBorderColor = Color.Transparent), keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next), isError = nameError != null, textStyle = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold, color = MidnightBlue))
-                if (nameError != null) Text(text = nameError!!, color = FunctionalRed, style = MaterialTheme.typography.bodyMedium)
-                OutlinedTextField(value = phone, onValueChange = { phone = it; phoneError = null }, placeholder = { Text("電話號碼") }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp), colors = OutlinedTextFieldDefaults.colors(focusedContainerColor = CardSurface, unfocusedContainerColor = CardSurface, focusedBorderColor = MidnightBlue, unfocusedBorderColor = Color.Transparent), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone), isError = phoneError != null, textStyle = MaterialTheme.typography.bodyLarge.copy(color = MidnightBlue))
-                if (phoneError != null) Text(text = phoneError!!, color = FunctionalRed, style = MaterialTheme.typography.bodyMedium)
+                Text(language.pick("基本资料", "Basic info"), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = TextSecondary)
+                OutlinedTextField(
+                    value = code,
+                    onValueChange = { code = it },
+                    placeholder = { Text(language.pick("客户编号", "Customer code")) },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedContainerColor = CardSurface,
+                        unfocusedContainerColor = CardSurface,
+                        focusedBorderColor = MidnightBlue,
+                        unfocusedBorderColor = Color.Transparent
+                    ),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                    textStyle = MaterialTheme.typography.bodyLarge.copy(color = MidnightBlue)
+                )
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = {
+                        name = it
+                        nameError = null
+                    },
+                    placeholder = { Text(language.pick("客户姓名 *", "Customer name *")) },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedContainerColor = CardSurface,
+                        unfocusedContainerColor = CardSurface,
+                        focusedBorderColor = MidnightBlue,
+                        unfocusedBorderColor = Color.Transparent
+                    ),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                    isError = nameError != null,
+                    textStyle = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold, color = MidnightBlue)
+                )
+                if (nameError != null) {
+                    Text(text = nameError!!, color = FunctionalRed, style = MaterialTheme.typography.bodyMedium)
+                }
+                OutlinedTextField(
+                    value = phone,
+                    onValueChange = {
+                        phone = it
+                        phoneError = null
+                    },
+                    placeholder = { Text(language.pick("电话号码", "Phone number")) },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedContainerColor = CardSurface,
+                        unfocusedContainerColor = CardSurface,
+                        focusedBorderColor = MidnightBlue,
+                        unfocusedBorderColor = Color.Transparent
+                    ),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                    isError = phoneError != null,
+                    textStyle = MaterialTheme.typography.bodyLarge.copy(color = MidnightBlue)
+                )
+                if (phoneError != null) {
+                    Text(text = phoneError!!, color = FunctionalRed, style = MaterialTheme.typography.bodyMedium)
+                }
+                OutlinedTextField(
+                    value = note,
+                    onValueChange = { note = it },
+                    placeholder = { Text(language.pick("备注", "Note")) },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedContainerColor = CardSurface,
+                        unfocusedContainerColor = CardSurface,
+                        focusedBorderColor = MidnightBlue,
+                        unfocusedBorderColor = Color.Transparent
+                    ),
+                    textStyle = MaterialTheme.typography.bodyLarge.copy(color = MidnightBlue)
+                )
             }
 
-            PhotoGrid(title = "證件照片", subtitle = "護照 / 證件最多 3 張", photoUris = passportPhotos, onPhotoChanged = { index, uri -> passportPhotos[index] = uri })
+            PhotoGrid(
+                title = language.pick("证件照片", "Document photos"),
+                subtitle = language.pick("身份证 / 护照等，最多 3 张。", "ID card, passport, or other documents, up to 3 photos."),
+                photoUris = passportPhotos,
+                onPhotoChanged = { index, uri -> passportPhotos[index] = uri }
+            )
 
             if (showLegacyIdCardSection || legacyIdCardPhotoUri != null) {
                 CustomerPhotoPicker(
-                    title = "舊版身份證照片",
-                    subtitle = "保留舊資料相容用，可單獨更換或移除。",
+                    title = language.pick("旧版身份证照片", "Legacy ID card photo"),
+                    subtitle = language.pick("保留旧资料相容用，可单独更换或移除。", "Kept for older records. You can replace or remove it separately."),
                     currentPhotoUri = legacyIdCardPhotoUri,
                     onPhotoSelected = { legacyIdCardPhotoUri = it },
                     onPhotoCleared = { legacyIdCardPhotoUri = null }
@@ -112,33 +245,46 @@ fun EditCustomerScreen(
 
             OutlinedButton(
                 onClick = { showDeleteConfirm = true },
-                modifier = Modifier.fillMaxWidth().height(56.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp),
                 colors = ButtonDefaults.outlinedButtonColors(contentColor = FunctionalRed),
                 border = BorderStroke(1.dp, FunctionalRed.copy(alpha = 0.3f)),
                 shape = RoundedCornerShape(16.dp)
             ) {
                 Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(20.dp))
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("刪除此客戶檔案", fontWeight = FontWeight.Bold)
+                Text(language.pick("删除此客户档案", "Delete this customer"), fontWeight = FontWeight.Bold)
+            }
             }
         }
 
         if (showDeleteConfirm) {
             AlertDialog(
                 onDismissRequest = { showDeleteConfirm = false },
-                title = { Text("確定要刪除嗎？") },
-                text = { Text("此操作將永久刪除 ${customer.name} 及其所有交易記錄。") },
+                title = { Text(language.pick("确定要删除吗？", "Delete this customer?")) },
+                text = {
+                    Text(
+                        language.pick(
+                            "此操作将永久删除 ${customer.name} 及其所有交易记录。",
+                            "This permanently deletes ${customer.name} and all related transactions."
+                        )
+                    )
+                },
                 confirmButton = {
                     Button(
                         onClick = {
-                            // --- 修复：传入对象 ---
                             customerViewModel.deleteCustomer(customer)
                             onSaved()
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = FunctionalRed)
-                    ) { Text("確認刪除") }
+                    ) { Text(language.pick("确认删除", "Delete")) }
                 },
-                dismissButton = { TextButton(onClick = { showDeleteConfirm = false }) { Text("取消") } }
+                dismissButton = {
+                    TextButton(onClick = { showDeleteConfirm = false }) {
+                        Text(language.pick("取消", "Cancel"))
+                    }
+                }
             )
         }
     }

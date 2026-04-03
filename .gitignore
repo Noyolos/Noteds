@@ -19,3 +19,11 @@ local.properties
 gradle/wrapper/gradle-wrapper.jar
 
 # Project exclude paths
+/app/release/
+*.apk
+*.aab
+*.jks
+*.keystore
+release-key
+release-key.*
+/.idea/deploymentTargetSelector.xml

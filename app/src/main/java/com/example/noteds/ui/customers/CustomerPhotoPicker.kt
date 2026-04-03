@@ -39,7 +39,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import coil.compose.AsyncImage
-import coil.request.ImageRequest
+import com.example.noteds.ui.components.rememberThumbnailImageRequest
+import com.example.noteds.ui.i18n.LocalAppLanguage
+import com.example.noteds.ui.i18n.pick
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
@@ -58,6 +60,7 @@ fun CustomerPhotoPicker(
     onPhotoCleared: (() -> Unit)? = null,
     onViewPhoto: ((String) -> Unit)? = null
 ) {
+    val language = LocalAppLanguage.current
     val context = LocalContext.current
     val authority = remember(context.packageName) { "${context.packageName}.fileprovider" }
     var showSheet by remember { mutableStateOf(false) }
@@ -66,6 +69,7 @@ fun CustomerPhotoPicker(
     val cameraPermissionState = rememberPermissionState(Manifest.permission.CAMERA)
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val coroutineScope = rememberCoroutineScope()
+    val previewRequest = rememberThumbnailImageRequest(currentPhotoUri, 80.dp)
 
     val takePictureLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.TakePicture()
@@ -102,16 +106,11 @@ fun CustomerPhotoPicker(
         }
     }
 
-    Column(
-        modifier = modifier
-    ) {
+    Column(modifier = modifier) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (currentPhotoUri != null) {
                 AsyncImage(
-                    model = ImageRequest.Builder(context)
-                        .data(currentPhotoUri)
-                        .crossfade(true)
-                        .build(),
+                    model = previewRequest,
                     contentDescription = null,
                     modifier = Modifier
                         .size(80.dp)
@@ -128,11 +127,11 @@ fun CustomerPhotoPicker(
                 Text(text = title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 Text(text = subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 TextButton(onClick = { showSheet = true }) {
-                    Text(text = if (currentPhotoUri == null) "Add photo" else "Change photo")
+                    Text(text = if (currentPhotoUri == null) language.pick("添加照片", "Add photo") else language.pick("更换照片", "Change photo"))
                 }
                 if (currentPhotoUri != null && onViewPhoto != null) {
                     TextButton(onClick = { onViewPhoto(currentPhotoUri) }) {
-                        Text("View photo")
+                        Text(language.pick("查看照片", "View photo"))
                     }
                 }
             }
@@ -145,11 +144,14 @@ fun CustomerPhotoPicker(
             sheetState = sheetState
         ) {
             Column(
-                modifier = Modifier
-                    .padding(24.dp),
+                modifier = Modifier.padding(24.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Text(text = "Update photo", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text(
+                    text = language.pick("更新照片", "Update photo"),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
                 TextButton(onClick = {
                     if (cameraPermissionState.status.isGranted) {
                         launchCamera()
@@ -158,10 +160,10 @@ fun CustomerPhotoPicker(
                         cameraPermissionState.launchPermissionRequest()
                     }
                 }) {
-                    Text("Take photo")
+                    Text(language.pick("拍照", "Take photo"))
                 }
                 TextButton(onClick = { galleryLauncher.launch("image/*") }) {
-                    Text("Choose from gallery")
+                    Text(language.pick("从相册选择", "Choose from gallery"))
                 }
                 if (currentPhotoUri != null && onPhotoCleared != null) {
                     TextButton(onClick = {
@@ -170,7 +172,7 @@ fun CustomerPhotoPicker(
                             showSheet = false
                         }
                     }) {
-                        Text("移除照片", color = MaterialTheme.colorScheme.error)
+                        Text(language.pick("移除照片", "Remove photo"), color = MaterialTheme.colorScheme.error)
                     }
                 }
                 TextButton(onClick = {
@@ -178,7 +180,7 @@ fun CustomerPhotoPicker(
                         showSheet = false
                     }
                 }) {
-                    Text("Cancel")
+                    Text(language.pick("取消", "Cancel"))
                 }
             }
         }
@@ -194,6 +196,7 @@ fun PhotoGrid(
     onPhotoChanged: (Int, String?) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val language = LocalAppLanguage.current
     val context = LocalContext.current
     val authority = remember(context.packageName) { "${context.packageName}.fileprovider" }
     val slots = List(3) { photoUris.getOrNull(it) }
@@ -265,17 +268,15 @@ fun PhotoGrid(
                     contentAlignment = Alignment.Center
                 ) {
                     if (uri != null) {
+                        val gridRequest = rememberThumbnailImageRequest(uri, 96.dp)
                         AsyncImage(
-                            model = ImageRequest.Builder(context)
-                                .data(uri)
-                                .crossfade(true)
-                                .build(),
+                            model = gridRequest,
                             contentDescription = null,
                             modifier = Modifier.fillMaxSize()
                         )
                     } else {
                         Text(
-                            text = "點擊上傳",
+                            text = language.pick("点击添加", "Tap to add"),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -291,11 +292,14 @@ fun PhotoGrid(
             sheetState = sheetState
         ) {
             Column(
-                modifier = Modifier
-                    .padding(24.dp),
+                modifier = Modifier.padding(24.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Text(text = "選擇照片來源", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text(
+                    text = language.pick("选择照片来源", "Choose photo source"),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
                 TextButton(onClick = {
                     if (cameraPermissionState.status.isGranted) {
                         launchCamera()
@@ -304,13 +308,11 @@ fun PhotoGrid(
                         cameraPermissionState.launchPermissionRequest()
                     }
                 }) {
-                    Text("拍照")
+                    Text(language.pick("拍照", "Take photo"))
                 }
                 TextButton(onClick = { galleryLauncher.launch("image/*") }) {
-                    Text("從相冊選擇")
+                    Text(language.pick("从相册选择", "Choose from gallery"))
                 }
-
-                // --- 新增：移除照片按钮 ---
                 if (slots[selectedIndex] != null) {
                     TextButton(onClick = {
                         onPhotoChanged(selectedIndex, null)
@@ -318,17 +320,15 @@ fun PhotoGrid(
                             showSheet = false
                         }
                     }) {
-                        Text("移除照片", color = MaterialTheme.colorScheme.error)
+                        Text(language.pick("移除照片", "Remove photo"), color = MaterialTheme.colorScheme.error)
                     }
                 }
-                // -----------------------
-
                 TextButton(onClick = {
                     coroutineScope.launch { sheetState.hide() }.invokeOnCompletion {
                         showSheet = false
                     }
                 }) {
-                    Text("取消")
+                    Text(language.pick("取消", "Cancel"))
                 }
             }
         }
@@ -337,6 +337,7 @@ fun PhotoGrid(
 
 @Composable
 private fun BoxPlaceholder(onClick: () -> Unit) {
+    val language = LocalAppLanguage.current
     Box(
         modifier = Modifier
             .size(80.dp)
@@ -346,7 +347,7 @@ private fun BoxPlaceholder(onClick: () -> Unit) {
         contentAlignment = Alignment.Center
     ) {
         Text(
-            text = "Tap to add",
+            text = language.pick("点此添加", "Tap to add"),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -359,7 +360,7 @@ private fun createTempImageUri(context: Context, authority: String): Uri? {
             ?: context.filesDir
         val image = File.createTempFile("customer_photo_", ".jpg", imagesDir)
         FileProvider.getUriForFile(context, authority, image)
-    } catch (ioe: IOException) {
+    } catch (_: IOException) {
         null
     }
 }

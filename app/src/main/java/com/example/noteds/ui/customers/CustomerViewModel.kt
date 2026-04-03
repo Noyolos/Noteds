@@ -19,6 +19,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -42,8 +44,8 @@ class CustomerViewModel(
         .create()
 
     // --- 新增：获取所有文件夹列表，用于移动功能的下拉选择 ---
-    val allFolders: StateFlow<List<CustomerEntity>> = customerRepository.getAllCustomers()
-        .map { list -> list.filter { it.isGroup && !it.isDeleted } }
+    val allFolders: StateFlow<List<CustomerEntity>> = customerRepository.getAllFolders()
+        .distinctUntilChanged()
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),
@@ -56,6 +58,7 @@ class CustomerViewModel(
     // 基础数据流：包含所有活跃客户及其自身余额
     val customersWithBalance: StateFlow<List<CustomerWithBalance>> =
         customerRepository.getCustomersWithBalance()
+            .distinctUntilChanged()
             .stateIn(
                 scope = viewModelScope,
                 started = SharingStarted.WhileSubscribed(5_000),
@@ -103,6 +106,8 @@ class CustomerViewModel(
                 }
             }
         }
+            .distinctUntilChanged()
+            .flowOn(Dispatchers.Default)
     }
 
     suspend fun getCustomer(id: Long): CustomerEntity? =

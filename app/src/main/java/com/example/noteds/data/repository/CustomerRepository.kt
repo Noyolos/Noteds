@@ -10,6 +10,8 @@ class CustomerRepository(
 ) {
     fun getAllCustomers(): Flow<List<CustomerEntity>> = customerDao.getAllCustomers()
 
+    fun getAllFolders(): Flow<List<CustomerEntity>> = customerDao.getAllFolders()
+
     suspend fun getAllCustomersSnapshot(): List<CustomerEntity> =
         customerDao.getAllCustomersSnapshot()
 

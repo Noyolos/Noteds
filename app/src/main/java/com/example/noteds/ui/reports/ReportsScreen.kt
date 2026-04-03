@@ -5,13 +5,30 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -27,7 +44,20 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.noteds.ui.theme.*
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.noteds.ui.components.AppScreenHeader
+import com.example.noteds.ui.i18n.AppLanguage
+import com.example.noteds.ui.i18n.LocalAppLanguage
+import com.example.noteds.ui.i18n.pick
+import com.example.noteds.ui.i18n.rememberCurrencyFormatter
+import com.example.noteds.ui.theme.BackgroundColor
+import com.example.noteds.ui.theme.CardSurface
+import com.example.noteds.ui.theme.DebtColor
+import com.example.noteds.ui.theme.MidnightBlue
+import com.example.noteds.ui.theme.PaymentColor
+import com.example.noteds.ui.theme.TextSecondary
+import com.example.noteds.ui.theme.TextWhite
+import com.example.noteds.ui.theme.VibrantOrange
 import java.text.NumberFormat
 import java.util.Locale
 import kotlinx.coroutines.launch
@@ -35,15 +65,18 @@ import kotlinx.coroutines.launch
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ReportsScreen(
-    reportsViewModel: ReportsViewModel
+    reportsViewModel: ReportsViewModel,
+    currentLanguage: AppLanguage,
+    onLanguageChange: (AppLanguage) -> Unit
 ) {
-    val monthlyStats by reportsViewModel.last6MonthsStats.collectAsState()
-    val agingStats by reportsViewModel.agingStats.collectAsState()
-    val topDebtors by reportsViewModel.topDebtors.collectAsState()
-    val totalTransactions by reportsViewModel.totalTransactions.collectAsState()
-    val averageCollectionPeriod by reportsViewModel.averageCollectionPeriod.collectAsState()
+    val language = LocalAppLanguage.current
+    val monthlyStats by reportsViewModel.last6MonthsStats.collectAsStateWithLifecycle()
+    val agingStats by reportsViewModel.agingStats.collectAsStateWithLifecycle()
+    val topDebtors by reportsViewModel.topDebtors.collectAsStateWithLifecycle()
+    val totalTransactions by reportsViewModel.totalTransactions.collectAsStateWithLifecycle()
+    val averageCollectionPeriod by reportsViewModel.averageCollectionPeriod.collectAsStateWithLifecycle()
 
-    val currencyFormatter = remember { NumberFormat.getCurrencyInstance(Locale.getDefault()) }
+    val currencyFormatter = rememberCurrencyFormatter()
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
@@ -51,9 +84,12 @@ fun ReportsScreen(
         contract = ActivityResultContracts.CreateDocument("application/zip")
     ) { uri ->
         uri?.let {
-            reportsViewModel.exportBackup(it) { success, message ->
+            reportsViewModel.exportBackup(it) { success, _ ->
                 scope.launch {
-                    snackbarHostState.showSnackbar(message ?: if (success) "備份完成" else "備份失敗")
+                    snackbarHostState.showSnackbar(
+                        if (success) language.pick("备份完成", "Backup completed")
+                        else language.pick("备份失败", "Backup failed")
+                    )
                 }
             }
         }
@@ -63,102 +99,176 @@ fun ReportsScreen(
         contract = ActivityResultContracts.GetContent()
     ) { uri ->
         uri?.let {
-            reportsViewModel.importBackup(it) { success, message ->
+            reportsViewModel.importBackup(it) { success, _ ->
                 scope.launch {
-                    snackbarHostState.showSnackbar(message ?: if (success) "導入完成" else "導入失敗")
+                    snackbarHostState.showSnackbar(
+                        if (success) language.pick("导入完成", "Import completed")
+                        else language.pick("导入失败", "Import failed")
+                    )
                 }
             }
         }
     }
 
     Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("財務報表", color = TextWhite, fontWeight = FontWeight.Bold) },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MidnightBlue)
-            )
-        },
         containerColor = BackgroundColor,
         snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { padding ->
         Column(
             modifier = Modifier
-                .fillMaxSize()
                 .padding(padding)
                 .verticalScroll(rememberScrollState())
-                .padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(24.dp)
+                .padding(bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
-             // Header Title inside body to match HTML style
-            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
-                 // HTML has header "財務報表" and subtitle "全面經營分析" inside the blue header.
-                 // In Compose, I put "財務報表" in TopAppBar.
-                 // I can add subtitle here or rely on TopAppBar.
-                 // HTML style has centered text.
-            }
+            AppScreenHeader(
+                title = language.pick("财务报表", "Financial Reports"),
+                subtitle = language.pick("备份、趋势和回款概览", "Backups, trends, and collection overview")
+            )
 
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Button(
                     onClick = { exportLauncher.launch("noteds_backup.zip") },
                     modifier = Modifier.weight(1f),
-                    colors = ButtonDefaults.buttonColors(containerColor = MidnightBlue)
+                    colors = ButtonDefaults.buttonColors(containerColor = MidnightBlue),
+                    shape = RoundedCornerShape(18.dp)
                 ) {
-                    Text("匯出備份", color = TextWhite, fontWeight = FontWeight.Bold)
+                    Text(language.pick("导出备份", "Export backup"), color = TextWhite, fontWeight = FontWeight.Bold)
                 }
                 OutlinedButton(
                     onClick = { importLauncher.launch("application/zip") },
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(18.dp)
                 ) {
-                    Text("匯入備份", fontWeight = FontWeight.Bold)
+                    Text(language.pick("导入备份", "Import backup"), fontWeight = FontWeight.Bold)
                 }
             }
 
-            // Monthly Bar Chart
-            ChartCard("每月賒賬 vs 還款") {
+            ChartCard(
+                title = language.pick("每月 Debt vs Payment", "Monthly Debt vs Payment"),
+                modifier = Modifier.padding(horizontal = 24.dp)
+            ) {
                 MonthlyBarChart(stats = monthlyStats, modifier = Modifier.fillMaxWidth().height(240.dp))
             }
 
-            // Aging Distribution
-            ChartCard("賬齡分佈 (0-90+天)") {
+            ChartCard(
+                title = language.pick("账龄分布 (0-90+天)", "Aging Distribution (0-90+ days)"),
+                modifier = Modifier.padding(horizontal = 24.dp)
+            ) {
                 AgingDonutChart(stats = agingStats, modifier = Modifier.fillMaxWidth().height(200.dp))
 
-                // Legend
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 16.dp),
                     horizontalArrangement = Arrangement.Center
                 ) {
                     agingStats.forEach { stat ->
-                         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 8.dp)) {
-                            Box(modifier = Modifier.size(12.dp).background(Color(stat.colorHex), androidx.compose.foundation.shape.CircleShape))
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(horizontal = 8.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(12.dp)
+                                    .background(Color(stat.colorHex), androidx.compose.foundation.shape.CircleShape)
+                            )
                             Spacer(modifier = Modifier.width(4.dp))
-                            // Extract "0-30" from "0-30 Days"
                             val label = stat.bucket.replace(" Days", "")
-                            Text(label, style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+                            Text(label, style = androidx.compose.material3.MaterialTheme.typography.labelSmall, color = TextSecondary)
                         }
                     }
                 }
             }
 
-            // Top Debtors Visualization
-            ChartCard("Top 欠款客戶") {
+            ChartCard(
+                title = language.pick("Top 欠款客户", "Top Debtors"),
+                modifier = Modifier.padding(horizontal = 24.dp)
+            ) {
                 TopDebtorsHorizontalChart(debtors = topDebtors, currencyFormatter = currencyFormatter)
             }
 
-            // Insight Cards
-            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                 InsightCard(
-                    title = "本月總流水",
-                    value = "$totalTransactions 筆",
+            Column(
+                modifier = Modifier.padding(horizontal = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                InsightCard(
+                    title = language.pick("本月总交易数", "Transactions this month"),
+                    value = language.pick("$totalTransactions 笔", "$totalTransactions entries"),
                     borderColor = MidnightBlue
                 )
                 InsightCard(
-                    title = "平均回款週期",
-                    value = String.format(Locale.getDefault(), "%.0f 天", averageCollectionPeriod),
+                    title = language.pick("平均回款周期", "Average collection period"),
+                    value = if (language == AppLanguage.ENGLISH) {
+                        String.format(Locale.ENGLISH, "%.0f days", averageCollectionPeriod)
+                    } else {
+                        String.format(Locale.SIMPLIFIED_CHINESE, "%.0f 天", averageCollectionPeriod)
+                    },
                     borderColor = VibrantOrange
                 )
+            }
+
+            LanguageCard(
+                currentLanguage = currentLanguage,
+                onLanguageChange = onLanguageChange,
+                modifier = Modifier.padding(horizontal = 24.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun LanguageCard(
+    currentLanguage: AppLanguage,
+    onLanguageChange: (AppLanguage) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val language = LocalAppLanguage.current
+
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = CardSurface),
+        elevation = CardDefaults.cardElevation(4.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(24.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Text(
+                text = "Language",
+                style = androidx.compose.material3.MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MidnightBlue
+            )
+            Text(
+                text = language.pick("切换后整个 app 会立即更新语言。", "Changing this updates the whole app immediately."),
+                style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
+                color = TextSecondary
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                AppLanguage.entries.forEach { option ->
+                    val selected = option == currentLanguage
+                    OutlinedButton(
+                        onClick = { onLanguageChange(option) },
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            containerColor = if (selected) MidnightBlue.copy(alpha = 0.08f) else Color.Transparent,
+                            contentColor = if (selected) MidnightBlue else TextSecondary
+                        ),
+                        shape = RoundedCornerShape(18.dp)
+                    ) {
+                        Text(option.displayLabel, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium)
+                    }
+                }
             }
         }
     }
@@ -168,9 +278,9 @@ fun ReportsScreen(
 fun InsightCard(title: String, value: String, borderColor: Color) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(containerColor = CardSurface),
-        elevation = CardDefaults.cardElevation(2.dp)
+        elevation = CardDefaults.cardElevation(4.dp)
     ) {
         Row(
             modifier = Modifier.padding(20.dp),
@@ -184,28 +294,28 @@ fun InsightCard(title: String, value: String, borderColor: Color) {
             )
             Spacer(modifier = Modifier.width(16.dp))
             Column {
-                Text(title, style = MaterialTheme.typography.labelSmall, color = TextSecondary, fontWeight = FontWeight.Medium)
-                Text(value, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = if(borderColor == MidnightBlue) MidnightBlue else VibrantOrange)
+                Text(title, style = androidx.compose.material3.MaterialTheme.typography.labelSmall, color = TextSecondary, fontWeight = FontWeight.Medium)
+                Text(value, style = androidx.compose.material3.MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = if (borderColor == MidnightBlue) MidnightBlue else VibrantOrange)
             }
         }
     }
 }
 
 @Composable
-fun ChartCard(title: String, content: @Composable () -> Unit) {
+fun ChartCard(title: String, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(containerColor = CardSurface),
-        elevation = CardDefaults.cardElevation(4.dp) // shadow-soft
+        elevation = CardDefaults.cardElevation(4.dp)
     ) {
         Column(modifier = Modifier.padding(24.dp)) {
             Text(
                 title,
-                style = MaterialTheme.typography.titleMedium,
+                style = androidx.compose.material3.MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
                 color = MidnightBlue,
-                modifier = Modifier.fillMaxWidth().wrapContentWidth(Alignment.CenterHorizontally)
+                modifier = Modifier.fillMaxWidth()
             )
             Spacer(modifier = Modifier.height(24.dp))
             content()
@@ -215,16 +325,10 @@ fun ChartCard(title: String, content: @Composable () -> Unit) {
 
 @Composable
 fun MonthlyBarChart(stats: List<MonthlyStats>, modifier: Modifier) {
-    // ... (Same logic, maybe colors check)
-    // HTML colors: Debt #D50000, Payment #00C853
-    // My Color.kt: DebtColor=#D50000, PaymentColor=#00C853. Correct.
-
     if (stats.isEmpty()) return
 
     Canvas(modifier = modifier) {
         val maxVal = stats.maxOfOrNull { maxOf(it.debt, it.payment) }?.toFloat() ?: 1f
-        // In HTML chart.js, bars are side-by-side per month.
-        // Here we draw them.
         val groupWidth = size.width / stats.size
         val barWidth = groupWidth * 0.35f
         val gap = groupWidth * 0.1f
@@ -238,24 +342,21 @@ fun MonthlyBarChart(stats: List<MonthlyStats>, modifier: Modifier) {
 
         stats.forEachIndexed { index, stat ->
             val centerX = index * groupWidth + groupWidth / 2
-
-            // Debt Bar (Left)
-            val debtHeight = (stat.debt.toFloat() / maxVal) * chartHeight * 0.9f // Scale 0.9 to leave top space
+            val debtHeight = (stat.debt.toFloat() / maxVal) * chartHeight * 0.9f
             if (debtHeight > 0) {
                 drawRoundRect(
                     color = DebtColor,
-                    topLeft = Offset(centerX - barWidth - gap/2, chartHeight - debtHeight),
+                    topLeft = Offset(centerX - barWidth - gap / 2, chartHeight - debtHeight),
                     size = Size(barWidth, debtHeight),
                     cornerRadius = CornerRadius(4.dp.toPx())
                 )
             }
 
-            // Payment Bar (Right)
             val paymentHeight = (stat.payment.toFloat() / maxVal) * chartHeight * 0.9f
             if (paymentHeight > 0) {
-                 drawRoundRect(
+                drawRoundRect(
                     color = PaymentColor,
-                    topLeft = Offset(centerX + gap/2, chartHeight - paymentHeight),
+                    topLeft = Offset(centerX + gap / 2, chartHeight - paymentHeight),
                     size = Size(barWidth, paymentHeight),
                     cornerRadius = CornerRadius(4.dp.toPx())
                 )
@@ -268,9 +369,9 @@ fun MonthlyBarChart(stats: List<MonthlyStats>, modifier: Modifier) {
                 textPaint
             )
         }
-        // Axis line?
+
         drawLine(
-            color = Color.LightGray.copy(alpha=0.5f),
+            color = Color.LightGray.copy(alpha = 0.5f),
             start = Offset(0f, chartHeight),
             end = Offset(size.width, chartHeight),
             strokeWidth = 1.dp.toPx()
@@ -284,17 +385,6 @@ fun AgingDonutChart(stats: List<AgingData>, modifier: Modifier) {
     val total = stats.sumOf { it.amount }
     if (total == 0.0) return
 
-    // HTML Colors:
-    // 0-30: #4CAF50 (Green)
-    // 31-60: #FFC107 (Amber)
-    // 61-90: #FF9800 (Orange)
-    // 90+: #F44336 (Red)
-
-    // Override colors locally to match HTML strictly if not matched in VM
-    // VM uses: 0xFF00C853, 0xFFFFAB00, 0xFFFF6D00, 0xFFD50000
-    // HTML uses: #4CAF50, #FFC107, #FF9800, #F44336
-    // I will update logic to use these specific colors.
-
     val colors = listOf(
         Color(0xFF4CAF50),
         Color(0xFFFFC107),
@@ -303,9 +393,9 @@ fun AgingDonutChart(stats: List<AgingData>, modifier: Modifier) {
     )
 
     Box(modifier = modifier, contentAlignment = Alignment.Center) {
-        Canvas(modifier = Modifier.size(180.dp)) { // Size similar to HTML h-48
+        Canvas(modifier = Modifier.size(180.dp)) {
             var startAngle = -90f
-            val strokeWidth = 40.dp.toPx() // thicker
+            val strokeWidth = 40.dp.toPx()
 
             stats.forEachIndexed { index, stat ->
                 val sweepAngle = ((stat.amount / total) * 360).toFloat()
@@ -319,7 +409,6 @@ fun AgingDonutChart(stats: List<AgingData>, modifier: Modifier) {
                 startAngle += sweepAngle
             }
         }
-        // Cutout center text? HTML doesn't seem to have text inside aging chart, only legend below.
     }
 }
 
@@ -335,14 +424,14 @@ fun TopDebtorsHorizontalChart(debtors: List<DebtorData>, currencyFormatter: Numb
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text(debtor.name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = MidnightBlue)
-                    Text(currencyFormatter.format(debtor.amount), style = MaterialTheme.typography.bodyMedium, color = DebtColor, fontWeight = FontWeight.Bold)
+                    Text(debtor.name, style = androidx.compose.material3.MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = MidnightBlue)
+                    Text(currencyFormatter.format(debtor.amount), style = androidx.compose.material3.MaterialTheme.typography.bodyMedium, color = DebtColor, fontWeight = FontWeight.Bold)
                 }
                 Spacer(modifier = Modifier.height(6.dp))
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(12.dp) // Thicker bars
+                        .height(12.dp)
                         .background(BackgroundColor, RoundedCornerShape(4.dp))
                 ) {
                     Box(

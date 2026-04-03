@@ -29,6 +29,8 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -62,11 +64,28 @@ class ReportsViewModel(
     private val appContext: Context
 ) : ViewModel() {
 
+    private val allCustomers: StateFlow<List<CustomerEntity>> = customerRepository.getAllCustomers()
+        .distinctUntilChanged()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000),
+            initialValue = emptyList()
+        )
+
+    private val allEntries: StateFlow<List<LedgerEntryEntity>> = ledgerRepository.getAllEntries()
+        .distinctUntilChanged()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000),
+            initialValue = emptyList()
+        )
+
     private val customersWithBalance: StateFlow<List<DebtorData>> =
         combineCustomerBalances(
-            customerRepository.getAllCustomers(),
-            ledgerRepository.getAllEntries()
+            allCustomers,
+            allEntries
         )
+            .flowOn(Dispatchers.Default)
             .stateIn(
                 scope = viewModelScope,
                 started = SharingStarted.WhileSubscribed(5_000),
@@ -78,6 +97,8 @@ class ReportsViewModel(
             list.filter { it.amount > 0.0 }
                 .sumOf { it.amount }
         }
+        .distinctUntilChanged()
+        .flowOn(Dispatchers.Default)
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),
@@ -90,13 +111,27 @@ class ReportsViewModel(
                 .sortedByDescending { it.amount }
                 .take(10)
         }
+        .distinctUntilChanged()
+        .flowOn(Dispatchers.Default)
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),
             initialValue = emptyList()
         )
 
-    val debtThisMonth: StateFlow<Double> = ledgerRepository.getAllEntries()
+    val outstandingCustomerCount: StateFlow<Int> = customersWithBalance
+        .map { list ->
+            list.count { it.amount > 0.0 }
+        }
+        .distinctUntilChanged()
+        .flowOn(Dispatchers.Default)
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000),
+            initialValue = 0
+        )
+
+    val debtThisMonth: StateFlow<Double> = allEntries
         .map { entries ->
             val (start, end) = getMonthRange()
             entries.filter {
@@ -105,13 +140,15 @@ class ReportsViewModel(
             }
                 .sumOf { it.amount }
         }
+        .distinctUntilChanged()
+        .flowOn(Dispatchers.Default)
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),
             initialValue = 0.0
         )
 
-    val repaymentThisMonth: StateFlow<Double> = ledgerRepository.getAllEntries()
+    val repaymentThisMonth: StateFlow<Double> = allEntries
         .map { entries ->
             val (start, end) = getMonthRange()
             entries.filter {
@@ -120,41 +157,49 @@ class ReportsViewModel(
             }
                 .sumOf { it.amount }
         }
+        .distinctUntilChanged()
+        .flowOn(Dispatchers.Default)
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),
             initialValue = 0.0
         )
 
-    val last6MonthsStats: StateFlow<List<MonthlyStats>> = ledgerRepository.getAllEntries()
+    val last6MonthsStats: StateFlow<List<MonthlyStats>> = allEntries
         .map { entries ->
             calculateLast6Months(entries)
         }
+        .distinctUntilChanged()
+        .flowOn(Dispatchers.Default)
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),
             initialValue = emptyList()
         )
 
-    val agingStats: StateFlow<List<AgingData>> = ledgerRepository.getAllEntries()
+    val agingStats: StateFlow<List<AgingData>> = allEntries
         .map { entries ->
             calculateAging(entries)
         }
+        .distinctUntilChanged()
+        .flowOn(Dispatchers.Default)
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),
             initialValue = emptyList()
         )
 
-    val totalTransactions: StateFlow<Int> = ledgerRepository.getAllEntries()
+    val totalTransactions: StateFlow<Int> = allEntries
         .map { it.size }
+        .distinctUntilChanged()
+        .flowOn(Dispatchers.Default)
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),
             initialValue = 0
         )
 
-    val averageCollectionPeriod: StateFlow<Double> = ledgerRepository.getAllEntries()
+    val averageCollectionPeriod: StateFlow<Double> = allEntries
         .map { entries ->
             val now = System.currentTimeMillis()
             val thirtyDaysAgo = now - 30L * 24 * 60 * 60 * 1000
@@ -174,16 +219,20 @@ class ReportsViewModel(
 
             if (recentDebt == 0.0) 0.0 else (outstanding / recentDebt) * 30.0
         }
+        .distinctUntilChanged()
+        .flowOn(Dispatchers.Default)
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),
             initialValue = 0.0
         )
 
-    val totalDebtTrend: StateFlow<List<Float>> = ledgerRepository.getAllEntries()
+    val totalDebtTrend: StateFlow<List<Float>> = allEntries
         .map { entries ->
             calculateDebtTrend(entries)
         }
+        .distinctUntilChanged()
+        .flowOn(Dispatchers.Default)
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),
