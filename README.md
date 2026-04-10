@@ -20,11 +20,11 @@ The app is designed around one core idea: *every ringgit in and out is tracked a
 
 | Dashboard | Customers |
 |-----------|-----------|
-| ![dashboard](Dashboard.jpg) | ![customers](Customers.jpg) |
+| ![dashboard](Dashboard.jpg) | ![customers](Customres.jpg) |
 
 | Customer Detail | Add Debt |
 |----------------|----------|
-| ![detail](CustomerDetail.jpg) | ![add-debt](AddDebt.jpg) |
+| ![detail](CustomerDetails.jpg) | ![add-debt](AddDebt.jpg) |
 
 | Reports — Charts | Reports — Aging & Top Debtors |
 |------------------|-------------------------------|
